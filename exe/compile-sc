@@ -1,0 +1,28 @@
+#!/bin/sh -e
+
+# description
+# * compiles the sc source code to c
+# dependencies
+# * sph-sc
+# * clang-format
+
+root="$PWD"
+sc=src/sc
+c=src/c-precompiled
+sc_macros="$root/other/sc-macros.sc"
+
+compile_sc() {
+  # create the c source code
+  mkdir -p "$c" &&
+  cd "$sc" &&
+  find -type f -name "*.sc" | sc --stdin-input-paths --parents --includes="$sc_macros" "$root/$c"
+  cd "$root" &&
+  find "$c" -type f -exec ./exe/format-c -i '{}' \; &&
+  for path in "$c/sph-reverb"/*.h.c
+  do
+    mv "$path" "$(dirname $path)/$(basename $path .h.c).h"
+  done
+  #rm "$c/sph-reverb/sc-macros.c"
+}
+
+compile_sc

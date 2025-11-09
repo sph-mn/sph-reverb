@@ -1,0 +1,18 @@
+#!/bin/sh
+
+sph_sc_root="$1"
+destination="$PWD/src/c/foreign/sph-reverb/sph"
+
+if test -d "$destination"
+then
+  rm "$destination"/*
+else
+  mkdir -p "$destination"
+fi
+
+cd "$sph_sc_root/src/c-precompiled/sph"
+
+cp status.h test.h "$destination"
+
+# replace include paths in copied files
+sed -i 's@#include <sph/@#include <sph-reverb/sph/@g' "$destination"/*
