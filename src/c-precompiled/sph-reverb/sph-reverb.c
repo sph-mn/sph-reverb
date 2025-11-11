@@ -1,4 +1,4 @@
-sp_reverb_response_t sp_reverb_late_response_lookup(sp_sample_t* frequency_list, sp_reverb_response_t* response_list, sp_time_t response_count, sp_sample_t query_frequency) {
+sp_reverb_response_t sp_reverb_late_lookup(sp_sample_t* frequency_list, sp_reverb_response_t* response_list, sp_time_t response_count, sp_sample_t query_frequency) {
   sp_time_t low;
   sp_time_t high;
   sp_time_t mid;
@@ -45,7 +45,7 @@ void sp_reverb_late_project(sp_reverb_response_t* response, sp_reverb_layout_t* 
     channel_index = (channel_index + 1);
   };
 }
-void sp_reverb_late_response_table(sp_reverb_late_config_t* config, sp_time_t* frequency_list, sp_time_t frequency_count, sp_reverb_response_t* response_list) {
+void sp_reverb_late_table(sp_reverb_late_config_t* config, sp_time_t* frequency_list, sp_time_t frequency_count, sp_reverb_response_t* response_list) {
   sp_time_t delay_index;
   sp_time_t frequency_index;
   sp_time_t band_index;

@@ -14,96 +14,107 @@ hierarchy of algorithmic choices:
 ~~~
 reverb
   early reflections
-    specular geometry
-      image source (convex, planar, specular)
-      beam tracing (nonconvex or complex)
-      optional: uniform theory of diffraction for edges
-      optional: biot-tolstoy-medwin formulation for offline high precision
-    modal refinement
-      activate only below the schroeder frequency or inside instrument-scale cavities
+    geometric acoustics
+      image-source method (convex, planar, specular boundaries)
+      beam tracing (nonconvex or topologically complex spaces)
+      uniform theory of diffraction for edge contributions
+    modal correction (low-frequency only: below the Schroeder frequency or within instrument-scale cavities)
+      uniform-grid helmholtz eigenproblem with robin boundary impedance; lanczos (thick-restart) for the lowest modes
   late reflections
-    eigenform feedback delay network
+    frequency-domain feedback delay network with eigenform and modal kernels
 ~~~
 
-characteristics:
-* maps one partial on one channel to multiple channels. reverberation is a spatial effect
-* linear, time-invariant, and material parameters are frequency-dependent but constant in time
-
 # late reflections
-models the late diffuse field of a reverberant system using an orthogonal feedback delay network.
-input parameters are static; output responses are fully precomputed over frequency.
-the system is linear, time-invariant, and spatial.
+## procedures
+sp_reverb_late_response_table
+  phi_i(f) = exp(-j * 2π f d_i)
+  G(f) = diag(phi_i(f)) * M * a(f)
+  A(f) = I − G(f)
+  x(f) = A(f)⁻¹ b
+  h(f) = cᵀ x(f)
+  gain(f) = |h(f)|
+  phase(f) = arg(h(f))
+  rho(f) = spectral_radius(G(f))
+  tau(f) = ln(1000) / (−ln(rho(f)))
+
+sp_reverb_late_response_lookup
+  result(f_q) = linear_interp(f, gain(f), tau(f), phase(f))
+
+sp_reverb_late_project
+  channel_gain_k = gain(f_q) * dot(basis_k, projection_vector)
+  channel_phase_k = phase_offset + phase(f_q)
+  channel_decay_k = tau(f_q)
+
+sp_reverb_late_eigenform
+  phi_i(f) = exp(−j * 2π f d_i)
+  G(f) = diag(phi_i(f)) * M * a(f)
+  (λ_max(f), v_max(f)) = dominant_eigenpair(G(f))
+  rho(f) = |λ_max(f)|
+  tau(f) = ln(1000) / (−ln(rho(f)))
+  phase(f) = arg(λ_max(f))
+  gain(f) = |cᵀ v_max(f)|
+
+sp_reverb_late_modal
+  z_k = r_k * exp(j * θ_k)
+  det(I − G(z_k)) = 0
+  G(z_k) v_k = v_k
+  w_kᵀ G(z_k) = w_kᵀ
+  α_k = (cᵀ v_k)(w_kᵀ b) / (w_kᵀ v_k)
+  f_k = θ_k / (2π)
+  tau_k = 1 / (−ln(r_k))
+  y_k(t) = |α_k| * amplitude * exp(−t / tau_k) * sin(2π f_k t + phase_offset + arg(α_k))
 
 ## functions
-# precomputes a grid of frequency responses for one late-field configuration.
-sp_reverb_late_table :: config (frequency ...) -> grid
-
-# interpolates a single frequency response from the grid.
-sp_reverb_late_lookup :: grid frequency -> response
-
-# maps a single response to per-channel gains through spatial basis projection.
-sp_reverb_late_project :: response layout -> (gain ...)
+sp_reverb_late_response_table :: config frequency -> response_table
+sp_reverb_late_response_lookup :: response_table frequency -> response
+sp_reverb_late_project :: response layout -> channel_response
+sp_reverb_late_eigenform :: config frequency -> response
+sp_reverb_late_modal :: config -> modal_set
+band_gain_at :: bands frequency -> gain
+build_feedback_matrix :: delays mix gain frequency -> matrix
+build_feedback_matrix_from_polar :: delays mix gain r theta -> matrix
+form_identity_minus_feedback :: matrix -> matrix
+lu_decompose :: matrix -> (l, u)
+lu_solve :: (l, u) vector -> vector
+power_iteration_dominant_eigenpair :: matrix -> (lambda, vector)
+eigen_equation_value :: config r theta -> (real, imag)
+eigen_equation_jacobian_finite_difference :: config r theta -> (∂Fr/∂r, ∂Fr/∂θ, ∂Fi/∂r, ∂Fi/∂θ)
+newton_step_on_eigen_equation :: (r, θ) (jacobian, function) -> (r_next, θ_next)
 
 ## structures
-time: unsigned integer in samples
-frequency: alias of time
-gain: real scalar
+config
+  delays
+  mix
+  bands
+  projection
+
+response_table
+  frequency
+  gain
+  tau
+  phase
 
 response
   gain
-  decay: time
-  phase: time
+  decay
+  phase
 
 layout
-  bases: (real) ...
-  channel_count: integer
-  basis_length: integer
+  bases
+  channel_count
+  basis_length
 
-config
-  delays: (time ...)
-  mix: ((real ...) ...)
-  bands: ((low high gain) ...)
-  overall_strength: real
+channel_response
+  gain
+  phase
+  decay
 
-grid
-  (frequency response) ...
+modal_set
+  frequency
+  decay
+  amplitude
+  phase
 
-## semantics
-
-mix
-* orthogonal feedback matrix of size (delay_count ** 2)
-* may be hadamard for powers of two
-* ensures energy-preserving diffusion
-* determines global spectral and spatial coupling
-
-bands
-* define piecewise-linear frequency-dependent decay and gain shaping
-* interpolated per frequency in table
-
-delays
-* define delay-line lengths of the network
-* mean delay sets overall phase scale
-* distribution controls modal density and echo spacing
-
-layout
-* defines spatial projection bases for multi-channel output
-* per-channel basis vectors must have equal norm
-* stereo uses two orthogonal or near-orthogonal bases
-
-grid
-* ordered list of {frequency -> response}
-* off-grid frequencies are linearly interpolated
-* recommended coverage: [0, nyquist]
-* density determines spectral precision
-
-## usage
-* define config with desired delays, mix matrix, and bands
-* choose frequency grid and compute responses: grid = sp_reverb_late_table(config, frequency_list)
-* for each partial or band, interpolate: response = sp_reverb_late_lookup(grid, frequency)
-* for each output layout, project: gains = sp_reverb_late_project(response, layout)
-* apply per-channel gains, decay, and phase to synthesized sines or noise
-
-the functions are pure; no memory allocation or side effects occur.
 
 # early reflections
 ## functions

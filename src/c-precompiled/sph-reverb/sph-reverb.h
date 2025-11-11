@@ -35,7 +35,7 @@ typedef struct {
   sp_time_t band_count;
   sp_sample_t strength;
 } sp_reverb_late_config_t;
-void sp_reverb_late_response_table(sp_reverb_late_config_t* config, sp_sample_t* frequencies, size_t frequency_count, sp_reverb_response_t* out_responses);
-sp_reverb_response_t sp_reverb_late_response_lookup(sp_sample_t* frequency_list, sp_reverb_response_t* response_list, sp_time_t response_count, sp_sample_t query_frequency);
+void sp_reverb_late_table(sp_reverb_late_config_t* config, sp_sample_t* frequencies, size_t frequency_count, sp_reverb_response_t* out_responses);
+sp_reverb_response_t sp_reverb_late_lookup(sp_sample_t* frequency_list, sp_reverb_response_t* response_list, sp_time_t response_count, sp_sample_t query_frequency);
 void sp_reverb_late_project(sp_reverb_response_t* response, sp_reverb_layout_t* layout, sp_sample_t* out_channel_gains, size_t out_channel_count);
 #endif
