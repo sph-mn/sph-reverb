@@ -1,122 +1,280 @@
 # sph-reverb
+frequency-domain reverb that scales from instrument cavities to concert halls and supports arbitrary spatial layouts.
 
-a deterministic, per-partial reverb with geometric early reflections and analytic late field. usable for both research and production synthesis.
+# algorithm hierarchy
+* early reflections
+  * geometric acoustics
+    * image-source method
+    * beam tracing
+    * uniform theory of diffraction
+* modal correction
+  * low-frequency Helmholtz eigenproblem on a uniform grid
+  * Robin boundary impedance
+  * Lanczos thick-restart eigensolver
+* late reflections
+  * modal feedback delay network in the frequency domain
+    * poles from delay geometry, absorption, and mixing
+    * state directions for spatial embedding of delay lines
+    * source coupling by state-excitation vector
+    * channel coupling by state-projection vectors
+    * residues from biorthogonal eigenvectors
+    * time-domain modal synthesis per mode and channel
 
-a reverb effect for additive synthesis working in the frequency-domain. purely synthetic, deterministic, and fully precomputed on the level of partial parameters.
-
-* supports arbitrary spatial layouts
-* scales cleanly from instrument cavities to concert halls
-* fully deterministic and reproducible
-
-* intel embree for bounding volume hierarchy
-
-hierarchy of algorithmic choices:
-~~~
-reverb
-  early reflections
-    geometric acoustics
-      image-source method (convex, planar, specular boundaries)
-      beam tracing (nonconvex or topologically complex spaces)
-      uniform theory of diffraction for edge contributions
-    modal correction (low-frequency only: below the Schroeder frequency or within instrument-scale cavities)
-      uniform-grid helmholtz eigenproblem with robin boundary impedance; lanczos (thick-restart) for the lowest modes
-  late reflections
-    frequency-domain feedback delay network with eigenform and modal kernels
-~~~
+# general implementation details
+* platform: c17, posix.1-2008, lp64, little endian, libc. primary target: x86_64, linux, musl.
+* dependencies: [embree](https://www.embree.org/) for the early reflections.
+* all times and all frequencies are unsigned integer periods that represent counts of samples.
+* sp_time_t is the discrete unsigned integer type for every quantity that is bounded by the systems maximum sample index. this includes time, frequency, decay, and phase.
+* sp_sample_t is the real type for all continuous-valued quantities such as gains, matrix entries, and intermediate values.
 
 # late reflections
+* structure
+  * late kernel outputs per channel decaying sinusoids
+  * a separate generator renders them as time-domain samples
+* space
+  * all spatial objects use the coordinate domain [-1, 1] ** dimension_count
+  * source position, channel positions, and state directions share this domain
+  * state directions encode late-field propagation directions, not room surfaces
+* geometry
+  * source position p uses position.values[0..d-1]
+  * channel c position x_c uses layout.bases[c * d .. c * d + d - 1]
+  * state direction s_i uses state_directions[i * d .. i * d + d - 1]
+  * d equals layout.basis_length equals position.dimension_count equals state_dimension_count
+
+## mapping
+~~~
+position: (dimension ...)
+input_partial
+  {t -> gain}
+  {t -> period}
+  phase
+  duration
+  position
+sampled_input_partial: gain period phase position
+input_partial -> sampled_input_partial
+modal_pole: period decay
+modal_residue: amplitude phase
+modal_pole_set: modal_pole:mode ...
+channel_modal_residue: channel_index mode_index amplitude phase
+channel_modal_set: channel_modal_residue ...
+sampled_input_partial -> channel_modal_set
+decay_output_partial: gain period phase decay
+(channel_modal_residue sampled_input_partial) -> decay_output_partial ...
+channel_output_partial
+  channel_index
+  {t -> gain}
+  {t -> period}
+  phase
+  duration
+decay_output_partial:channel ... -> channel_output_partial:channel ...
+residual_tail
+  channel_index
+  start_time
+  duration
+  noise_color
+  decay_profile
+(config position layout) -> residual_tail:channel ...
+~~~
+
 ## procedures
-sp_reverb_late_response_table
-  phi_i(f) = exp(-j * 2π f d_i)
-  G(f) = diag(phi_i(f)) * M * a(f)
-  A(f) = I − G(f)
-  x(f) = A(f)⁻¹ b
-  h(f) = cᵀ x(f)
-  gain(f) = |h(f)|
-  phase(f) = arg(h(f))
-  rho(f) = spectral_radius(G(f))
-  tau(f) = ln(1000) / (−ln(rho(f)))
+~~~
+sp_reverb_late_modal_poles
+  given config
+  search complex plane for z_k = r_k * exp(j * theta_k) with 0 < r_k < 1
+  solve det(I - G(z_k)) = 0
+  for each solution k
+    period_k = round(2 * pi / theta_k) in samples
+    decay_k = round(1 / (-log(r_k))) in samples
+    define modal_pole_k = (period_k decay_k)
+  optionally sort modes by estimated energy or residue magnitude
+  assemble modal_pole_set from modal_pole_k
 
-sp_reverb_late_response_lookup
-  result(f_q) = linear_interp(f, gain(f), tau(f), phase(f))
+sp_reverb_late_modal_state_excitation
+  given config position
+  for each delay line i
+    read state direction s_i from config.state_directions
+    compute unit source direction u_p from position
+    compute unit state direction u_i from s_i
+    cos_i = dot(u_p, u_i)
+    x_i = max(cos_i, 0)
+    b_i_real = f_source(x_i) for a chosen source lobe function
+  normalize b_i_real so sum_i (b_i_real^2) = 1
+  define input vector b(position) with real part b_i_real and zero imaginary part
 
-sp_reverb_late_project
-  channel_gain_k = gain(f_q) * dot(basis_k, projection_vector)
-  channel_phase_k = phase_offset + phase(f_q)
-  channel_decay_k = tau(f_q)
+sp_reverb_late_modal_state_projection
+  given config layout position channel_index
+  read channel position x_c from layout.bases
+  compute unit channel direction u_c from x_c
+  compute scalar channel pan gain g_c(position, x_c) from a chosen pan law on [-1, 1]^dimension
+  for each delay line i
+    read state direction s_i from config.state_directions
+    compute unit state direction u_i from s_i
+    cos_ci = dot(u_c, u_i)
+    y_ci = max(cos_ci, 0)
+    h_ci = f_channel(y_ci) for a chosen projection lobe function
+    c_ci_real = g_c(position, x_c) * h_ci
+  optionally normalize c_ci_real over i
+  define output vector c(channel_index, position) with real part c_ci_real and zero imaginary part
 
-sp_reverb_late_eigenform
-  phi_i(f) = exp(−j * 2π f d_i)
-  G(f) = diag(phi_i(f)) * M * a(f)
-  (λ_max(f), v_max(f)) = dominant_eigenpair(G(f))
-  rho(f) = |λ_max(f)|
-  tau(f) = ln(1000) / (−ln(rho(f)))
-  phase(f) = arg(λ_max(f))
-  gain(f) = |cᵀ v_max(f)|
+sp_reverb_late_modal_residues
+  given config modal_pole_set position layout
+  construct shared input vector b(position) by sp_reverb_late_modal_state_excitation
+  for each mode k with modal_pole_k in modal_pole_set
+    reconstruct theta_k and r_k from period_k and decay_k
+      theta_k = 2 * pi / period_k
+      r_k = exp(-1 / decay_k)
+    form complex pole z_k = r_k * exp(j * theta_k)
+    build G_k = G(z_k) from config
+    solve G_k * v_k = v_k for a nontrivial right eigenvector v_k
+    solve transpose(w_k) * G_k = transpose(w_k) for a nontrivial left eigenvector w_k
+    compute scalar sk = transpose(w_k) * b(position)
+    compute scalar n_k = transpose(w_k) * v_k
+    for each channel_index
+      construct output vector c(channel_index, position) by sp_reverb_late_modal_state_projection
+      compute scalar t_kc = transpose(c(channel_index,position)) * v_k
+      alpha_kc = (t_kc * s_k) / n_k
+      amplitude_kc = absolute_value(alpha_kc)
+      phase_kc = round(argument(alpha_kc) * period_k / (2 * pi)) in samples
+      define channel_modal_residue(channel_index, k) = (amplitude_kc phase_kc)
+  assemble channel_modal_set from channel_modal_residue(channel_index, k)
 
-sp_reverb_late_modal
-  z_k = r_k * exp(j * θ_k)
-  det(I − G(z_k)) = 0
-  G(z_k) v_k = v_k
-  w_kᵀ G(z_k) = w_kᵀ
-  α_k = (cᵀ v_k)(w_kᵀ b) / (w_kᵀ v_k)
-  f_k = θ_k / (2π)
-  tau_k = 1 / (−ln(r_k))
-  y_k(t) = |α_k| * amplitude * exp(−t / tau_k) * sin(2π f_k t + phase_offset + arg(α_k))
+sp_reverb_late_modal_excitation
+  given modal_pole_set channel_modal_set sampled_input_partial:...
+  for each sampled_input_partial with period_in
+    for each channel_modal_residue(channel_index, k)
+      read period_k and decay_k from modal_pole_k
+      read amplitude_kc and phase_kc from channel_modal_residue
+      if using direct mode add
+        gain_kc = amplitude_kc
+      else
+        theta_k = 2 * pi / period_k
+        r_k = exp(-1 / decay_k)
+        z_k = r_k * exp(j * theta_k)
+        z_ratio = exp(-j * 2 * pi * period_in / period_k)
+        gain_kc = amplitude_kc / absolute_value(1 - z_k * z_ratio)
+      define decay_output_partial_kc
+        gain = gain_kc
+        period = period_k
+        phase = phase_kc
+        decay = decay_k
+  collect decay_output_partial_kc as decay_output_partial:channel ...
+
+sp_reverb_late_modal_render_partials
+  given decay_output_partial:channel ...
+  for each decay_output_partial_kc
+    construct channel_output_partial for channel_index
+      {t -> gain(t)} is exponential decay with time constant decay
+      {t -> period(t)} is constant period
+      phase is phase
+      duration is derived from decay or from a global tail limit
+  assemble channel_output_partial:channel ...
+
+sp_reverb_late_residual_tail
+  given config position layout
+  derive residual_tail:channel ... from unresolved mode region
+  for example
+    use colored noise per channel with gain shaped by a short decay_profile
+    start at time where deterministic modal tail energy falls below residual.start_threshold
+    limit duration per channel to residual.duration_limit
+
+sp_reverb_late_render
+  given config position layout input_partial:...
+  sampled_input_partial:... = map input_partial:... -> sampled_input_partial:...
+  modal_pole_set = sp_reverb_late_modal_poles(config)
+  channel_modal_set = sp_reverb_late_modal_residues(config modal_pole_set position layout)
+  decay_output_partial:channel ... = sp_reverb_late_modal_excitation(modal_pole_set channel_modal_set sampled_input_partial:...)
+  channel_output_partial:channel ... = sp_reverb_late_modal_render_partials(decay_output_partial:channel ...)
+  residual_tail:channel ... = sp_reverb_late_residual_tail(config position layout) (optional)
+~~~
 
 ## functions
-sp_reverb_late_response_table :: config frequency -> response_table
-sp_reverb_late_response_lookup :: response_table frequency -> response
-sp_reverb_late_project :: response layout -> channel_response
-sp_reverb_late_eigenform :: config frequency -> response
-sp_reverb_late_modal :: config -> modal_set
-band_gain_at :: bands frequency -> gain
-build_feedback_matrix :: delays mix gain frequency -> matrix
-build_feedback_matrix_from_polar :: delays mix gain r theta -> matrix
-form_identity_minus_feedback :: matrix -> matrix
-lu_decompose :: matrix -> (l, u)
-lu_solve :: (l, u) vector -> vector
-power_iteration_dominant_eigenpair :: matrix -> (lambda, vector)
-eigen_equation_value :: config r theta -> (real, imag)
-eigen_equation_jacobian_finite_difference :: config r theta -> (∂Fr/∂r, ∂Fr/∂θ, ∂Fi/∂r, ∂Fi/∂θ)
-newton_step_on_eigen_equation :: (r, θ) (jacobian, function) -> (r_next, θ_next)
+~~~
+sp_reverb_late_modal_poles :: config -> modal_pole_set
+sp_reverb_late_modal_state_excitation :: config position -> b_vector
+sp_reverb_late_modal_state_projection :: config layout position channel_index -> c_vector
+sp_reverb_late_modal_residues :: config modal_pole_set position layout -> channel_modal_set
+sp_reverb_late_modal_excitation :: modal_pole_set channel_modal_set sampled_input_partial:... -> decay_output_partial:channel ...
+sp_reverb_late_modal_render_partials :: decay_output_partial:channel ... -> channel_output_partial:channel ...
+sp_reverb_late_residual_tail :: config position layout -> residual_tail:channel ...
+sp_reverb_late_render :: config position layout input_partial:... -> (channel_output_partial:channel ... residual_tail:channel ...)
+sp_reverb_build_feedback_matrix :: config period -> matrix
+sp_reverb_build_feedback_matrix_from_polar :: config r theta -> matrix
+sp_reverb_form_identity_minus_feedback :: matrix -> matrix
+sp_reverb_lower_upper_factorization :: matrix -> (l u)
+sp_reverb_lower_upper_solve :: (l u) vector -> vector
+sp_reverb_power_iteration_dominant_eigenpair :: matrix -> (lambda vector)
+sp_reverb_eigen_equation_value :: config r theta -> (real imag)
+sp_reverb_eigen_equation_jacobian_finite_difference :: config r theta -> (dfr_dr dfr_dtheta dfi_dr dfi_dtheta)
+sp_reverb_newton_step_on_eigen_equation :: (r theta) (jacobian function) -> (r_next theta_next)
+~~~
 
 ## structures
+~~~
 config
   delays
   mix
   bands
-  projection
-
-response_table
-  frequency
-  gain
-  tau
+  state_directions
+  state_dimension_count
+  modal_solver
+  residual
+layout: bases channel_count basis_length
+bands: low_frequency high_frequency gain
+modal_solver: max_mode_count search_region tolerance
+residual: enabled start_threshold duration_limit noise_color_model
+position: dimension_count values
+modal_pole_set: period:mode ... decay:mode ...
+channel_modal_residue: channel_index mode_index amplitude phase
+channel_modal_set: channel_modal_residue ...
+decay_output_partial: gain period phase decay
+channel_output_partial
+  channel_index
+  {t -> gain}
+  {t -> period}
   phase
+  duration
+residual_tail
+  channel_index
+  start_time
+  duration
+  noise_color
+  decay_profile
+~~~
 
-response
-  gain
-  decay
-  phase
+## further reading
+### references
+* Jot R. (1991). "Etude et realisation d’un spatialisateur de sons par modeles physiques et perceptifs". Defines the FDN structure, mixing matrices, and multiband attenuation used in the late kernel.
+* Jot R., Chaigne A. (1991). "Digital delay networks for designing artificial reverberators". Establishes delay-line networks with controlled energy decay; basis for band-dependent absorption.
+* Schlecht S.J., Habets E.A.P. (2015). "Reverberation modeling using a time-varying feedback delay network". Provides det(I − G(z)) = 0 and the numerical root-finding used to obtain FDN poles.
+* Schlecht S.J. (2019). "Feedback Delay Networks: Echo Density, Stability, and Mode Analysis". Formalizes FDN modal decomposition and biorthogonal residues; defines the mathematical model underlying the modal set.
+* Schroeder M.R. (1962). "Natural sounding artificial reverberation". Introduces late reverberation as a sum of exponentially decaying sinusoids; supports modal synthesis.
+* Poletti M.A. (1996). "A modal decomposition approach to sound field reproduction". Gives the projection model linking mode shapes to receiver positions; informs the definition of c_c(position).
+* Daniel J., Rault J.-B., Polack J.-D. (1998). "Ambisonics encoding of the sound field associated with room acoustics". Shows late fields can be modeled as isotropic directional distributions; supports directional state sampling.
+* Siltanen S., Lokki T. (2007). "Directional analysis of room impulse responses". Demonstrates structured directional energy in late fields; motivates using per-delay state directions.
+* Samarasinghe P., Abhayapala T., Poletti M. (2015). "Room impulse response synthesis using 3D modal decomposition". Provides explicit source- and listener-dependent modal excitation; supports b(position) and c_c(position).
 
-layout
-  bases
-  channel_count
-  basis_length
-
-channel_response
-  gain
-  phase
-  decay
-
-modal_set
-  frequency
-  decay
-  amplitude
-  phase
-
+### wikipedia
+* [Complex number](https://en.wikipedia.org/wiki/Complex_number)
+* [Linear interpolation](https://en.wikipedia.org/wiki/Linear_interpolation)
+* [LU decomposition](https://en.wikipedia.org/wiki/LU_decomposition)
+* [Determinant](https://en.wikipedia.org/wiki/Determinant)
+* [Jacobian matrix and determinant](https://en.wikipedia.org/wiki/Jacobian_matrix_and_determinant)
+* [Newton's method](https://en.wikipedia.org/wiki/Newton%27s_method)
+* [Eigenvalues and eigenvectors](https://en.wikipedia.org/wiki/Eigenvalues_and_eigenvectors)
+* [Power iteration](https://en.wikipedia.org/wiki/Power_iteration)
+* [Modal analysis](https://en.wikipedia.org/wiki/Modal_analysis)
+* [Residue (complex analysis)](https://en.wikipedia.org/wiki/Residue_%28complex_analysis%29)
+* [Residue theorem](https://en.wikipedia.org/wiki/Residue_theorem)
 
 # early reflections
+## algorithm layout
+* geometric acoustics
+  * image-source method (convex, planar, specular boundaries)
+  * beam tracing (nonconvex or topologically complex spaces)
+  * uniform theory of diffraction for edge contributions
+* modal correction (low-frequency only: below the schroeder frequency or within instrument-scale cavities)
+  * uniform-grid helmholtz eigenproblem with robin boundary impedance; lanczos (thick-restart) for the lowest modes
+
 ## functions
 ~~~
 sp_reverb_early_geometry :: (vec3 ...) (index ...) -> geometry
