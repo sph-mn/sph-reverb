@@ -1,53 +1,141 @@
 
-#include <sph-reverb/sph-reverb.h>
+#include <math.h>
 #include <sph-reverb/sph/test.h>
-status_t test_sp_map_event(void) {
+#include <sph-reverb/sph-reverb.h>
+
+#define feq(a, b) (fabs((a - b)) <= 1.0e-12)
+#define m_pi_half 1.5707963267948966
+#define m_pi 3.141592653589793
+status_t test_sph_reverb_complex_primitives(void) {
   status_declare;
-  sp_time_t size;
-  sp_block_t block;
-  sp_sample_t* amod;
-  sp_wave_event_config_t* config;
-  sp_map_event_config_t* map_event_config;
-  sp_declare_event(parent);
-  sp_declare_event(child);
-  error_memory_init(2);
-  status_require((sp_wave_event_config_new((&config))));
-  error_memory_add(config);
-  status_require((sp_map_event_config_new((&map_event_config))));
-  error_memory_add(map_event_config);
-  size = (10 * _sp_rate);
-  status_require((sp_path_samples2((&amod), size, (1.0), (1.0))));
-  config->channel_count = 1;
-  (config->channel_config)->frq = 300;
-  (config->channel_config)->fmod = 0;
-  (config->channel_config)->amp = 1;
-  (config->channel_config)->amod = amod;
-  child.start = 0;
-  child.end = size;
-  sp_wave_event((&child), config);
-  status_require((sp_block_new(1, size, (&block))));
-  map_event_config->event = child;
-  map_event_config->map_generate = test_sp_map_event_generate;
-  map_event_config->isolate = 1;
-  parent.start = child.start;
-  parent.end = child.end;
-  sp_map_event((&parent), map_event_config);
-  status_require(((parent.prepare)((&parent))));
-  status_require(((parent.generate)(0, (size / 2), (&block), (&parent))));
-  status_require(((parent.generate)((size / 2), size, (&block), (&parent))));
-  (parent.free)((&parent));
-  sp_block_free((&block));
-  free(amod);
+  sp_sample_t real_value;
+  sp_sample_t imag_value;
+  sp_sample_t mag_value;
+  sp_sample_t arg_value;
+  sp_reverb_complex_divide((1.0), (0.0), (1.0), (0.0), (&real_value), (&imag_value));
+  test_helper_assert("complex_divide_1_real", (feq(real_value, (1.0))));
+  test_helper_assert("complex_divide_1_imag", (feq(imag_value, (0.0))));
+  sp_reverb_complex_divide((1.0), (1.0), (1.0), (0.0), (&real_value), (&imag_value));
+  test_helper_assert("complex_divide_2_real", (feq(real_value, (1.0))));
+  test_helper_assert("complex_divide_2_imag", (feq(imag_value, (1.0))));
+  mag_value = sp_reverb_complex_magnitude((3.0), (4.0));
+  test_helper_assert("complex_mag_3_4", (feq(mag_value, (5.0))));
+  arg_value = sp_reverb_complex_argument((0.0), (1.0));
+  test_helper_assert("complex_arg_pi_over_2", (feq(arg_value, m_pi_half)));
 exit:
-  if (status_is_failure) {
-    error_memory_free;
-  };
+  status_return;
+}
+status_t test_sph_reverb_feedback_matrix_basic(void) {
+  status_declare;
+  sp_reverb_late_config_t config;
+  sp_time_t delays[1];
+  sp_sample_t mix_row_major[1];
+  sp_sample_t matrix_real[1];
+  sp_sample_t matrix_imag[1];
+  sp_sample_t band_gain;
+  delays[0] = 100;
+  mix_row_major[0] = 1.0;
+  config.delays = delays;
+  config.delay_count = 1;
+  config.mix_row_major = mix_row_major;
+  config.mix_rows = 1;
+  config.mix_columns = 1;
+  config.band_periods = NULL;
+  config.band_gains = NULL;
+  config.band_count = 0;
+  config.strength = 0.5;
+  config.state_directions = NULL;
+  config.state_dimension_count = 0;
+  band_gain = sp_reverb_band_gain_at((&config), 200);
+  test_helper_assert("band_gain_not_nan", (!isnan(band_gain)));
+  sp_reverb_build_feedback_matrix((&config), 200, matrix_real, matrix_imag);
+  test_helper_assert("feedback_matrix_real_not_nan", (!isnan((matrix_real[0]))));
+  test_helper_assert("feedback_matrix_imag_not_nan", (!isnan((matrix_imag[0]))));
+  sp_reverb_build_feedback_matrix_from_polar((&config), (0.8), (m_pi * 0.25), matrix_real, matrix_imag);
+  test_helper_assert("feedback_matrix_polar_real_not_nan", (!isnan((matrix_real[0]))));
+  test_helper_assert("feedback_matrix_polar_imag_not_nan", (!isnan((matrix_imag[0]))));
+exit:
+  status_return;
+}
+status_t test_sph_reverb_lu_and_solve_basic(void) {
+  status_declare;
+  sp_sample_t matrix_real[4];
+  sp_sample_t matrix_imag[4];
+  sp_sample_t right_real[2];
+  sp_sample_t right_imag[2];
+  sp_sample_t solution_real[2];
+  sp_sample_t solution_imag[2];
+  sp_time_t pivot_list[2];
+  matrix_real[0] = 4.0;
+  matrix_real[1] = 1.0;
+  matrix_real[2] = 2.0;
+  matrix_real[3] = 3.0;
+  matrix_imag[0] = 0.0;
+  matrix_imag[1] = 0.0;
+  matrix_imag[2] = 0.0;
+  matrix_imag[3] = 0.0;
+  right_real[0] = 1.0;
+  right_real[1] = 1.0;
+  right_imag[0] = 0.0;
+  right_imag[1] = 0.0;
+  sp_reverb_lower_upper_factorization(2, matrix_real, matrix_imag, pivot_list);
+  sp_reverb_lower_upper_solve(2, matrix_real, matrix_imag, pivot_list, right_real, right_imag, solution_real, solution_imag);
+  test_helper_assert("lu_solve_real_0_not_nan", (!isnan((solution_real[0]))));
+  test_helper_assert("lu_solve_real_1_not_nan", (!isnan((solution_real[1]))));
+  test_helper_assert("lu_solve_imag_0_not_nan", (!isnan((solution_imag[0]))));
+  test_helper_assert("lu_solve_imag_1_not_nan", (!isnan((solution_imag[1]))));
+exit:
+  status_return;
+}
+status_t test_sph_reverb_state_spatial_basic(void) {
+  status_declare;
+  sp_reverb_late_config_t config;
+  sp_reverb_position_t position;
+  sp_reverb_layout_t layout;
+  sp_sample_t state_directions[2];
+  sp_sample_t bases[2];
+  sp_sample_t vec_real[2];
+  sp_sample_t vec_imag[2];
+  state_directions[0] = -1.0;
+  state_directions[1] = 1.0;
+  bases[0] = -1.0;
+  bases[1] = 1.0;
+  config.delays = NULL;
+  config.delay_count = 2;
+  config.mix_row_major = NULL;
+  config.mix_rows = 0;
+  config.mix_columns = 0;
+  config.band_periods = NULL;
+  config.band_gains = NULL;
+  config.band_count = 0;
+  config.strength = 1.0;
+  config.state_directions = state_directions;
+  config.state_dimension_count = 1;
+  position.dimension_count = 1;
+  (position.values)[0] = 0.0;
+  layout.bases = bases;
+  layout.channel_count = 2;
+  layout.basis_length = 1;
+  sp_reverb_build_state_excitation((&config), (&position), vec_real, vec_imag);
+  test_helper_assert("state_excitation_real_0_not_nan", (!isnan((vec_real[0]))));
+  test_helper_assert("state_excitation_real_1_not_nan", (!isnan((vec_real[1]))));
+  test_helper_assert("state_excitation_imag_0_zero", (feq((vec_imag[0]), (0.0))));
+  test_helper_assert("state_excitation_imag_1_zero", (feq((vec_imag[1]), (0.0))));
+  sp_reverb_build_state_projection((&config), (&layout), (&position), 0, vec_real, vec_imag);
+  test_helper_assert("state_projection_real_0_not_nan", (!isnan((vec_real[0]))));
+  test_helper_assert("state_projection_real_1_not_nan", (!isnan((vec_real[1]))));
+  test_helper_assert("state_projection_imag_0_zero", (feq((vec_imag[0]), (0.0))));
+  test_helper_assert("state_projection_imag_1_zero", (feq((vec_imag[1]), (0.0))));
+exit:
   status_return;
 }
 int main(void) {
   status_declare;
-  test_helper_test_one(test_sp_map_event);
-exit:
+  test_helper_test_one(test_sph_reverb_complex_primitives);
+  test_helper_test_one(test_sph_reverb_feedback_matrix_basic);
+  test_helper_test_one(test_sph_reverb_lu_and_solve_basic);
+  test_helper_test_one(test_sph_reverb_state_spatial_basic);
   test_helper_display_summary;
+exit:
   return ((status.id));
 }

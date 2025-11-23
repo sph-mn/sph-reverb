@@ -11,6 +11,9 @@
 #ifndef sp_time_t
 #define sp_time_t uint32_t
 #endif
+#ifndef sp_pi
+#define sp_pi 3.141592653589793
+#endif
 #ifndef sp_channel_count_t
 #define sp_channel_count_t uint8_t
 #endif
@@ -51,7 +54,7 @@ typedef struct {
   sp_sample_t* band_gains;
   sp_time_t band_count;
   sp_sample_t strength;
-  sp_sample_t state_directions;
+  sp_sample_t* state_directions;
   uint8_t state_dimension_count;
 } sp_reverb_late_config_t;
 void sp_reverb_complex_divide(sp_sample_t a_real, sp_sample_t a_imag, sp_sample_t b_real, sp_sample_t b_imag, sp_sample_t* out_real, sp_sample_t* out_imag);
@@ -69,4 +72,6 @@ void sp_reverb_power_iteration_dominant_eigenpair(sp_time_t line_count, sp_sampl
 void sp_reverb_eigen_equation_value(sp_reverb_late_config_t* config, sp_sample_t radius, sp_sample_t angle, sp_sample_t* out_real, sp_sample_t* out_imag);
 void sp_reverb_eigen_equation_jacobian_finite_difference(sp_reverb_late_config_t* config, sp_sample_t radius, sp_sample_t angle, sp_sample_t* out_real_radius, sp_sample_t* out_real_angle, sp_sample_t* out_imag_radius, sp_sample_t* out_imag_angle);
 void sp_reverb_newton_step_on_eigen_equation(sp_sample_t radius, sp_sample_t angle, sp_sample_t real_radius, sp_sample_t real_angle, sp_sample_t imag_radius, sp_sample_t imag_angle, sp_sample_t value_real, sp_sample_t value_imag, sp_sample_t* out_radius_next, sp_sample_t* out_angle_next);
+void sp_reverb_build_state_excitation(sp_reverb_late_config_t* config, sp_reverb_position_t* position, sp_sample_t* out_real, sp_sample_t* out_imag);
+void sp_reverb_build_state_projection(sp_reverb_late_config_t* config, sp_reverb_layout_t* layout, sp_reverb_position_t* position, sp_channel_count_t channel_index, sp_sample_t* out_real, sp_sample_t* out_imag);
 #endif

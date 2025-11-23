@@ -1,2 +1,2 @@
 
-#include <sph-reverb/sph-reverb.h>
+#include <sph-reverb/sph-reverb.c>

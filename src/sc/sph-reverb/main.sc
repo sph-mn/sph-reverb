@@ -1,1 +1,1 @@
-(pre-include "sph-reverb/sph-reverb.h")
+(pre-include "sph-reverb/sph-reverb.c")

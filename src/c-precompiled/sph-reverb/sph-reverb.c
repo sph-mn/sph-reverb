@@ -1,3 +1,7 @@
+
+#include <stdlib.h>
+#include <math.h>
+#include <sph-reverb/sph-reverb.h>
 void sp_reverb_complex_divide(sp_sample_t a_real, sp_sample_t a_imag, sp_sample_t b_real, sp_sample_t b_imag, sp_sample_t* out_real, sp_sample_t* out_imag) {
   sp_sample_t denom;
   denom = ((b_real * b_real) + (b_imag * b_imag));
@@ -50,7 +54,7 @@ void sp_reverb_build_feedback_matrix(sp_reverb_late_config_t* config, sp_time_t 
   row_index = 0;
   while ((row_index < line_count)) {
     delay_samples = (config->delays)[row_index];
-    angle = (-2.0 * ((sp_sample_t)(M_PI)) * ((sp_sample_t)(delay_samples)) * inv_period);
+    angle = (-2.0 * ((sp_sample_t)(sp_pi)) * ((sp_sample_t)(delay_samples)) * inv_period);
     phase_real = cos(angle);
     phase_imag = sin(angle);
     column_index = 0;
@@ -316,7 +320,7 @@ void sp_reverb_power_iteration_dominant_eigenpair(sp_time_t line_count, sp_sampl
   sum_imag = 0.0;
   row_number = 0;
   while ((row_number < line_count)) {
-    row_sum_eal = 0.0;
+    row_sum_real = 0.0;
     row_sum_imag = 0.0;
     column_number = 0;
     while ((column_number < line_count)) {
@@ -370,16 +374,16 @@ void sp_reverb_eigen_equation_value(sp_reverb_late_config_t* config, sp_sample_t
   sign_value = 1;
   cycle_begin = 0;
   while ((cycle_begin < line_count)) {
-    if (== ((visited_list[cycle_begin]), 0)) {
+    if (visited_list[cycle_begin] == 0) {
       cycle_point = cycle_begin;
       cycle_size = 0;
-      while (== ((visited_list[cycle_point]), 0)) {
+      while ((visited_list[cycle_point] == 0)) {
         visited_list[cycle_point] = 1;
         cycle_point = pivot_list[cycle_point];
         cycle_size = (cycle_size + 1);
       };
       if (cycle_size > 0) {
-        if (== (((cycle_size - 1) % 2), 1)) {
+        if (((cycle_size - 1) % 2) == 1) {
           sign_value = (sign_value * -1);
         };
       };
@@ -457,98 +461,75 @@ void sp_reverb_newton_step_on_eigen_equation(sp_sample_t radius_current, sp_samp
 }
 sp_reverb_modal_set_t sp_reverb_late_modal(sp_reverb_late_config_t* config) {
   sp_reverb_modal_set_t modal_set;
-  sp_time_t line_count;
+  sp_time_t delay_line_count;
   sp_time_t mode_count;
   sp_time_t mode_index;
-  size_t mode_size;
-  sp_sample_t radius;
-  sp_sample_t angle;
+  size_t list_size;
+  sp_sample_t radius_current;
+  sp_sample_t angle_current;
   sp_sample_t value_real;
   sp_sample_t value_imag;
-  sp_sample_t dfr_dr;
-  sp_sample_t dfr_dtheta;
-  sp_sample_t dfi_dr;
-  sp_sample_t dfi_dtheta;
-  sp_sample_t next_radius;
-  sp_sample_t next_angle;
+  sp_sample_t derivative_real_radius;
+  sp_sample_t derivative_real_angle;
+  sp_sample_t derivative_imag_radius;
+  sp_sample_t derivative_imag_angle;
+  sp_sample_t radius_next;
+  sp_sample_t angle_next;
   sp_time_t iteration_index;
   sp_time_t iteration_limit;
   sp_sample_t period_float;
-  sp_time_t period_samples;
-  sp_sample_t tau_float;
-  sp_time_t tau_samples;
-  line_count = config->delay_count;
-  mode_count = line_count;
-  mode_size = ((size_t)(mode_count));
-  modal_set.period_list = NULL;
-  modal_set.decay_list = NULL;
-  modal_set.amplitude_list = NULL;
-  modal_set.phase_list = NULL;
+  sp_time_t period_integer;
+  sp_sample_t decay_float;
+  sp_time_t decay_integer;
+  modal_set.mode_list = NULL;
   modal_set.mode_count = 0;
-  if (== (mode_count, 0)) {
+  delay_line_count = config->delay_count;
+  mode_count = delay_line_count;
+  if (mode_count == 0) {
     return (modal_set);
   };
-  modal_set.period_list = ((sp_time_t*)(malloc((mode_size * sizeof(sp_time_t)))));
-  modal_set.decay_list = ((sp_time_t*)(malloc((mode_size * sizeof(sp_time_t)))));
-  modal_set.amplitude_list = ((sp_sample_t*)(malloc((mode_size * sizeof(sp_sample_t)))));
-  modal_set.phase_list = ((sp_time_t*)(malloc((mode_size * sizeof(sp_time_t)))));
-  if (== ((modal_set.period_list), NULL) || == ((modal_set.decay_list), NULL) || == ((modal_set.amplitude_list), NULL) || == ((modal_set.phase_list), NULL)) {
-    if (modal_set.period_list != NULL) {
-      free((modal_set.period_list));
-    };
-    if (modal_set.decay_list != NULL) {
-      free((modal_set.decay_list));
-    };
-    if (modal_set.amplitude_list != NULL) {
-      free((modal_set.amplitude_list));
-    };
-    if (modal_set.phase_list != NULL) {
-      free((modal_set.phase_list));
-    };
-    modal_set.period_list = NULL;
-    modal_set.decay_list = NULL;
-    modal_set.amplitude_list = NULL;
-    modal_set.phase_list = NULL;
-    modal_set.mode_count = 0;
+  list_size = ((size_t)(mode_count));
+  modal_set.mode_list = ((sp_reverb_mode_t*)(malloc((list_size * sizeof(sp_reverb_mode_t)))));
+  if (modal_set.mode_list == NULL) {
     return (modal_set);
   };
   iteration_limit = 16;
   mode_index = 0;
   while ((mode_index < mode_count)) {
-    radius = 0.9;
-    angle = ((2.0 * M_PI * (((sp_sample_t)(mode_index)) + 0.5)) / ((sp_sample_t)(mode_count)));
+    radius_current = 0.9;
+    angle_current = ((2.0 * sp_pi * (((sp_sample_t)(mode_index)) + 0.5)) / ((sp_sample_t)(mode_count)));
     iteration_index = 0;
     while ((iteration_index < iteration_limit)) {
-      sp_reverb_eigen_equation_value(config, radius, angle, ((&)(value_real)), ((&)(value_imag)));
-      sp_reverb_eigen_equation_jacobian_finite_difference(config, radius, angle, ((&)(dfr_dr)), ((&)(dfr_dtheta)), ((&)(dfi_dr)), ((&)(dfi_dtheta)));
-      sp_reverb_newton_step_on_eigen_equation(radius, angle, dfr_dr, dfr_dtheta, dfi_dr, dfi_dtheta, value_real, value_imag, ((&)(next_radius)), ((&)(next_angle)));
-      radius = next_radius;
-      angle = next_angle;
+      sp_reverb_eigen_equation_value(config, radius_current, angle_current, (&value_real), (&value_imag));
+      sp_reverb_eigen_equation_jacobian_finite_difference(config, radius_current, angle_current, (&derivative_real_radius), (&derivative_real_angle), (&derivative_imag_radius), (&derivative_imag_angle));
+      sp_reverb_newton_step_on_eigen_equation(radius_current, angle_current, derivative_real_radius, derivative_real_angle, derivative_imag_radius, derivative_imag_angle, value_real, value_imag, (&radius_next), (&angle_next));
+      radius_current = radius_next;
+      angle_current = angle_next;
       iteration_index = (iteration_index + 1);
     };
-    if (radius <= 0.0) {
-      radius = 1.0e-6;
+    if (radius_current <= 0.0) {
+      radius_current = 1.0e-6;
     };
-    if (radius >= 1.0) {
-      radius = (1.0 - 1.0e-6);
+    if (radius_current >= 1.0) {
+      radius_current = (1.0 - 1.0e-6);
     };
-    if (angle <= 0.0) {
-      angle = 1.0e-6;
+    if (angle_current <= 0.0) {
+      angle_current = 1.0e-6;
     };
-    period_float = ((2.0 * M_PI) / angle);
+    period_float = ((2.0 * sp_pi) / angle_current);
     if (period_float < 1.0) {
       period_float = 1.0;
     };
-    period_samples = ((sp_time_t)(llround(period_float)));
-    tau_float = (1.0 / (-log(radius)));
-    if (tau_float < 1.0) {
-      tau_float = 1.0;
+    period_integer = ((sp_time_t)(llround(period_float)));
+    decay_float = (1.0 / (-log(radius_current)));
+    if (decay_float < 1.0) {
+      decay_float = 1.0;
     };
-    tau_samples = ((sp_time_t)(llround(tau_float)));
-    (modal_set.period_list)[mode_index] = period_samples;
-    (modal_set.decay_list)[mode_index] = tau_samples;
-    (modal_set.amplitude_list)[mode_index] = config->strength;
-    (modal_set.phase_list)[mode_index] = 0;
+    decay_integer = ((sp_time_t)(llround(decay_float)));
+    ((modal_set.mode_list)[mode_index]).period = period_integer;
+    ((modal_set.mode_list)[mode_index]).decay = decay_integer;
+    ((modal_set.mode_list)[mode_index]).amplitude = config->strength;
+    ((modal_set.mode_list)[mode_index]).phase = 0;
     mode_index = (mode_index + 1);
   };
   modal_set.mode_count = mode_count;
@@ -807,10 +788,10 @@ void sp_reverb_null_vector_of_shifted_matrix(sp_time_t line_count, sp_sample_t* 
   sp_sample_t norm_square;
   sp_sample_t norm_value;
   sp_sample_t inverse_norm_value;
-  if (== (line_count, 0)) {
+  if (line_count == 0) {
     return;
   };
-  if (== (line_count, 1)) {
+  if (line_count == 1) {
     out_real[0] = 1.0;
     out_imag[0] = 0.0;
     return;
@@ -832,7 +813,7 @@ void sp_reverb_null_vector_of_shifted_matrix(sp_time_t line_count, sp_sample_t* 
       column_index = 0;
       while ((column_index < line_count)) {
         if (column_index != pivot_index) {
-          if (== (use_transpose, 0)) {
+          if (use_transpose == 0) {
             index_full = ((sp_time_t)(((row_index * line_count) + column_index)));
           } else {
             index_full = ((sp_time_t)(((column_index * line_count) + row_index)));
@@ -844,7 +825,7 @@ void sp_reverb_null_vector_of_shifted_matrix(sp_time_t line_count, sp_sample_t* 
         } else {
           column_index = (column_index + 1);
         };
-        if (== (use_transpose, 0)) {
+        if (use_transpose == 0) {
           index_full = ((sp_time_t)(((row_index * line_count) + pivot_index)));
         } else {
           index_full = ((sp_time_t)(((pivot_index * line_count) + row_index)));
@@ -860,7 +841,7 @@ void sp_reverb_null_vector_of_shifted_matrix(sp_time_t line_count, sp_sample_t* 
     sp_reverb_lower_upper_solve(reduced_count, reduced_real, reduced_imag, pivot_list, right_real, right_imag, solution_real, solution_imag);
     row_index = 0;
     while ((row_index < line_count)) {
-      if (== (row_index, pivot_index)) {
+      if (row_index == pivot_index) {
         out_real[row_index] = 1.0;
         out_imag[row_index] = 0.0;
       } else {
@@ -921,4 +902,136 @@ void sp_reverb_left_eigenvector_at_pole(sp_reverb_late_config_t* config, sp_samp
   sp_reverb_build_feedback_matrix_from_polar(config, radius, angle, feedback_real, feedback_imag);
   sp_reverb_form_identity_minus_feedback(line_count, feedback_real, feedback_imag, a_real, a_imag);
   sp_reverb_null_vector_of_shifted_matrix(line_count, a_real, a_imag, 1, out_real, out_imag);
+}
+void sp_reverb_late_modal_residues(sp_reverb_late_config_t* config, sp_reverb_modal_set_t* poles, sp_reverb_layout_t* layout, sp_reverb_position_t* position, sp_reverb_channel_modal_set_t* out_modes) {
+  sp_time_t state_count;
+  sp_time_t mode_count;
+  sp_channel_count_t channel_count;
+  size_t total_mode_count;
+  sp_sample_t* state_excitation_real;
+  sp_sample_t* state_excitation_imag;
+  sp_sample_t* right_vector_real;
+  sp_sample_t* right_vector_imag;
+  sp_sample_t* left_vector_real;
+  sp_sample_t* left_vector_imag;
+  sp_sample_t* channel_projection_real;
+  sp_sample_t* channel_projection_imag;
+  sp_time_t mode_index;
+  sp_channel_count_t channel_index;
+  sp_sample_t period_value;
+  sp_sample_t decay_value;
+  sp_sample_t angle_value;
+  sp_sample_t radius_value;
+  sp_sample_t sum_real;
+  sp_sample_t sum_imag;
+  sp_sample_t s_real;
+  sp_sample_t s_imag;
+  sp_sample_t n_real;
+  sp_sample_t n_imag;
+  sp_sample_t t_real;
+  sp_sample_t t_imag;
+  sp_sample_t st_real;
+  sp_sample_t st_imag;
+  sp_sample_t alpha_real;
+  sp_sample_t alpha_imag;
+  sp_sample_t amplitude_value;
+  sp_sample_t phase_angle;
+  sp_time_t phase_samples;
+  sp_time_t state_index;
+  sp_reverb_mode_t* mode_array;
+  out_modes->mode_list = NULL;
+  out_modes->mode_count = 0;
+  out_modes->channel_count = 0;
+  state_count = config->delay_count;
+  mode_count = poles->mode_count;
+  channel_count = layout->channel_count;
+  if (state_count == 0) {
+    return;
+  };
+  if (mode_count == 0) {
+    return;
+  };
+  if (channel_count == 0) {
+    return;
+  };
+  total_mode_count = (((size_t)(mode_count)) * ((size_t)(channel_count)));
+  mode_array = ((sp_reverb_mode_t*)(malloc((total_mode_count * sizeof(sp_reverb_mode_t)))));
+  if (mode_array == NULL) {
+    return;
+  };
+  state_excitation_real = ((sp_sample_t*)(__builtin_alloca((((size_t)(state_count)) * sizeof(sp_sample_t)))));
+  state_excitation_imag = ((sp_sample_t*)(__builtin_alloca((((size_t)(state_count)) * sizeof(sp_sample_t)))));
+  right_vector_real = ((sp_sample_t*)(__builtin_alloca((((size_t)(state_count)) * sizeof(sp_sample_t)))));
+  right_vector_imag = ((sp_sample_t*)(__builtin_alloca((((size_t)(state_count)) * sizeof(sp_sample_t)))));
+  left_vector_real = ((sp_sample_t*)(__builtin_alloca((((size_t)(state_count)) * sizeof(sp_sample_t)))));
+  left_vector_imag = ((sp_sample_t*)(__builtin_alloca((((size_t)(state_count)) * sizeof(sp_sample_t)))));
+  channel_projection_real = ((sp_sample_t*)(__builtin_alloca((((size_t)(state_count)) * sizeof(sp_sample_t)))));
+  channel_projection_imag = ((sp_sample_t*)(__builtin_alloca((((size_t)(state_count)) * sizeof(sp_sample_t)))));
+  sp_reverb_build_state_excitation(config, position, state_excitation_real, state_excitation_imag);
+  mode_index = 0;
+  while ((mode_index < mode_count)) {
+    period_value = ((sp_sample_t)(((poles->mode_list)[mode_index]).period));
+    decay_value = ((sp_sample_t)(((poles->mode_list)[mode_index]).decay));
+    if (period_value <= 0.0) {
+      period_value = 1.0;
+    };
+    if (decay_value <= 0.0) {
+      decay_value = 1.0;
+    };
+    angle_value = ((2.0 * sp_pi) / period_value);
+    radius_value = exp((-1.0 / decay_value));
+    sp_reverb_right_eigenvector_at_pole(config, radius_value, angle_value, right_vector_real, right_vector_imag);
+    sp_reverb_left_eigenvector_at_pole(config, radius_value, angle_value, left_vector_real, left_vector_imag);
+    s_real = 0.0;
+    s_imag = 0.0;
+    state_index = 0;
+    while ((state_index < state_count)) {
+      sum_real = ((left_vector_real[state_index] * state_excitation_real[state_index]) - (left_vector_imag[state_index] * state_excitation_imag[state_index]));
+      sum_imag = ((left_vector_real[state_index] * state_excitation_imag[state_index]) + (left_vector_imag[state_index] * state_excitation_real[state_index]));
+      s_real = (s_real + sum_real);
+      s_imag = (s_imag + sum_imag);
+      state_index = (state_index + 1);
+    };
+    n_real = 0.0;
+    n_imag = 0.0;
+    state_index = 0;
+    while ((state_index < state_count)) {
+      sum_real = ((left_vector_real[state_index] * right_vector_real[state_index]) - (left_vector_imag[state_index] * right_vector_imag[state_index]));
+      sum_imag = ((left_vector_real[state_index] * right_vector_imag[state_index]) + (left_vector_imag[state_index] * right_vector_real[state_index]));
+      n_real = (n_real + sum_real);
+      n_imag = (n_imag + sum_imag);
+      state_index = (state_index + 1);
+    };
+    st_real = 0.0;
+    st_imag = 0.0;
+    channel_index = 0;
+    while ((channel_index < channel_count)) {
+      sp_reverb_build_state_projection(config, layout, position, channel_index, channel_projection_real, channel_projection_imag);
+      t_real = 0.0;
+      t_imag = 0.0;
+      state_index = 0;
+      while ((state_index < state_count)) {
+        sum_real = ((channel_projection_real[state_index] * right_vector_real[state_index]) - (channel_projection_imag[state_index] * right_vector_imag[state_index]));
+        sum_imag = ((channel_projection_real[state_index] * right_vector_imag[state_index]) + (channel_projection_imag[state_index] * right_vector_real[state_index]));
+        t_real = (t_real + sum_real);
+        t_imag = (t_imag + sum_imag);
+        state_index = (state_index + 1);
+      };
+      st_real = ((s_real * t_real) - (s_imag * t_imag));
+      st_imag = ((s_real * t_imag) + (s_imag * t_real));
+      sp_reverb_complex_divide(st_real, st_imag, n_real, n_imag, (&alpha_real), (&alpha_imag));
+      amplitude_value = sp_reverb_complex_magnitude(alpha_real, alpha_imag);
+      phase_angle = sp_reverb_complex_argument(alpha_real, alpha_imag);
+      phase_samples = ((sp_time_t)(llround(((phase_angle * period_value) / (2.0 * sp_pi)))));
+      (mode_array[((((size_t)(channel_index)) * ((size_t)(mode_count))) + ((size_t)(mode_index)))]).period = ((poles->mode_list)[mode_index]).period;
+      (mode_array[((((size_t)(channel_index)) * ((size_t)(mode_count))) + ((size_t)(mode_index)))]).decay = ((poles->mode_list)[mode_index]).decay;
+      (mode_array[((((size_t)(channel_index)) * ((size_t)(mode_count))) + ((size_t)(mode_index)))]).amplitude = amplitude_value;
+      (mode_array[((((size_t)(channel_index)) * ((size_t)(mode_count))) + ((size_t)(mode_index)))]).phase = phase_samples;
+      channel_index = (channel_index + 1);
+    };
+    mode_index += 1;
+  };
+  out_modes->mode_list = mode_array;
+  out_modes->mode_count = mode_count;
+  out_modes->channel_count = channel_count;
 }

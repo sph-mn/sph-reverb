@@ -4,6 +4,7 @@
 (pre-define-if-not-defined
   sp-sample-t double
   sp-time-t uint32-t
+  sp-pi 3.14159265358979323846
   sp-channel-count-t uint8-t
   sph-reverb-position-max-dimensions 8)
 
@@ -33,11 +34,8 @@
       (band-gains sp-sample-t*)
       (band-count sp-time-t)
       (strength sp-sample-t)
-
-      (state-directions sp-sample-t)
-      (state-dimension-count uint8-t)
-
-      ))
+      (state-directions sp-sample-t*)
+      (state-dimension-count uint8-t)))
   (sp-reverb-complex-divide a-real a-imag b-real b-imag out-real out-imag)
   (void sp-sample-t sp-sample-t sp-sample-t sp-sample-t sp-sample-t* sp-sample-t*)
   (sp-reverb-complex-magnitude value-real value-imag) (sp-sample-t sp-sample-t sp-sample-t)
@@ -73,6 +71,11 @@
     real-radius real-angle imag-radius
     imag-angle value-real value-imag out-radius-next out-angle-next)
   (void sp-sample-t sp-sample-t
-    sp-sample-t sp-sample-t sp-sample-t sp-sample-t sp-sample-t sp-sample-t sp-sample-t* sp-sample-t*))
+    sp-sample-t sp-sample-t sp-sample-t sp-sample-t sp-sample-t sp-sample-t sp-sample-t* sp-sample-t*)
+  (sp-reverb-build-state-excitation config position out-real out-imag)
+  (void sp-reverb-late-config-t* sp-reverb-position-t* sp-sample-t* sp-sample-t*)
+  (sp-reverb-build-state-projection config layout position channel-index out-real out-imag)
+  (void sp-reverb-late-config-t* sp-reverb-layout-t*
+    sp-reverb-position-t* sp-channel-count-t sp-sample-t* sp-sample-t*))
 
 (pre-include-guard-end)
