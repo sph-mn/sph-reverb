@@ -16,7 +16,7 @@ warnings="-Wall -Wfatal-errors"
 gcc_options="-std=c17 -pedantic-errors -D_POSIX_C_SOURCE=200809L -D_FILE_OFFSET_BITS=64 $warnings -fno-common -fno-math-errno -fPIC -O$optimisation -I$c/foreign -I$c_sc"
 
 compile_sph_reverb() {
-  src="$c_sc/sph-reverb/main.c"
+  src="$c_sc/sph-reverb/sph-reverb.c"
   obj="$target_dir/sph-reverb.o"
   lib="$target_dir/libsph-reverb.so"
   $compiler $gcc_options -c "$src" -o "$obj"
@@ -24,7 +24,7 @@ compile_sph_reverb() {
 }
 
 compile_test_sph_reverb() {
-  src="$c_sc/test/main.c"
+  src="$c_sc/test/sph-reverb.c"
   obj="$target_dir/test-sph-reverb.o"
   exe="$target_dir/test-libsph-reverb"
   $compiler $gcc_options -c "$src" -o "$obj"
