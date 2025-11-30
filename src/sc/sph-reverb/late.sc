@@ -1,4 +1,4 @@
-(define (sp-reverb-complex-divide a-real a-imag b-real b-imag out-real out-imag)
+(define (sp-reverb-late-complex-divide a-real a-imag b-real b-imag out-real out-imag)
   (void sp-sample-t sp-sample-t sp-sample-t sp-sample-t sp-sample-t* sp-sample-t*)
   (declare denom sp-sample-t)
   (set
@@ -6,15 +6,18 @@
     *out-real (/ (+ (* a-real b-real) (* a-imag b-imag)) denom)
     *out-imag (/ (- (* a-imag b-real) (* a-real b-imag)) denom)))
 
-(define (sp-reverb-complex-magnitude value-real value-imag) (sp-sample-t sp-sample-t sp-sample-t)
+(define (sp-reverb-late-complex-magnitude value-real value-imag)
+  (sp-sample-t sp-sample-t sp-sample-t)
   (declare sum sp-sample-t)
   (set sum (+ (* value-real value-real) (* value-imag value-imag)))
   (return (sqrt sum)))
 
-(define (sp-reverb-complex-argument value-real value-imag) (sp-sample-t sp-sample-t sp-sample-t)
+(define (sp-reverb-late-complex-argument value-real value-imag)
+  (sp-sample-t sp-sample-t sp-sample-t)
   (return (atan2 value-imag value-real)))
 
-(define (sp-reverb-band-gain-at config period) (sp-sample-t sp-reverb-late-config-t* sp-time-t)
+(define (sp-reverb-late-band-gain-at config period)
+  (sp-sample-t sp-reverb-late-config-t* sp-time-t)
   (declare band-index sp-time-t weight sp-sample-t)
   (if (= config:band-count 0) (return 0.0))
   (if (<= period (array-get config:band-periods 0)) (return (array-get config:band-gains 0)))
@@ -35,7 +38,7 @@
         (- (array-get config:band-gains (+ band-index 1)) (array-get config:band-gains band-index))
         weight))))
 
-(define (sp-reverb-build-feedback-matrix config period matrix-real matrix-imag)
+(define (sp-reverb-late-build-feedback-matrix config period matrix-real matrix-imag)
   (void sp-reverb-late-config-t* sp-time-t sp-sample-t* sp-sample-t*)
   (declare
     line-count sp-time-t
@@ -53,7 +56,7 @@
     scale sp-sample-t)
   (set
     line-count config:delay-count
-    band-gain (sp-reverb-band-gain-at config period)
+    band-gain (sp-reverb-late-band-gain-at config period)
     total-gain (* config:strength band-gain)
     inv-period (/ (convert-type 1.0 sp-sample-t) (convert-type period sp-sample-t))
     row-index 0)
@@ -75,7 +78,8 @@
         column-index (+ column-index 1)))
     (set row-index (+ row-index 1))))
 
-(define (sp-reverb-build-feedback-matrix-from-polar config radius angle matrix-real matrix-imag)
+(define
+  (sp-reverb-late-build-feedback-matrix-from-polar config radius angle matrix-real matrix-imag)
   (void sp-reverb-late-config-t* sp-sample-t sp-sample-t sp-sample-t* sp-sample-t*)
   (declare
     line-count sp-time-t
@@ -113,7 +117,7 @@
     (set row-index (+ row-index 1))))
 
 (define
-  (sp-reverb-form-identity-minus-feedback line-count feedback-real feedback-imag a-real a-imag)
+  (sp-reverb-late-form-identity-minus-feedback line-count feedback-real feedback-imag a-real a-imag)
   (void sp-time-t sp-sample-t* sp-sample-t* sp-sample-t* sp-sample-t*)
   (declare row-index sp-time-t column-index sp-time-t index sp-time-t)
   (set row-index 0)
@@ -131,7 +135,8 @@
         column-index (+ column-index 1)))
     (set row-index (+ row-index 1))))
 
-(define (sp-reverb-lower-upper-factorization line-count matrix-real matrix-imag pivot-index-list)
+(define
+  (sp-reverb-late-lower-upper-factorization line-count matrix-real matrix-imag pivot-index-list)
   (void sp-time-t sp-sample-t* sp-sample-t* sp-time-t*)
   (declare
     k-index sp-time-t
@@ -158,13 +163,14 @@
       pivot-row k-index
       index-a (convert-type (+ (* k-index line-count) k-index) sp-time-t)
       pivot-abs-max
-      (sp-reverb-complex-magnitude (array-get matrix-real index-a) (array-get matrix-imag index-a))
+      (sp-reverb-late-complex-magnitude (array-get matrix-real index-a)
+        (array-get matrix-imag index-a))
       row-index (+ k-index 1))
     (while (< row-index line-count)
       (set
         index-b (convert-type (+ (* row-index line-count) k-index) sp-time-t)
         value-abs
-        (sp-reverb-complex-magnitude (array-get matrix-real index-b)
+        (sp-reverb-late-complex-magnitude (array-get matrix-real index-b)
           (array-get matrix-imag index-b)))
       (if (> value-abs pivot-abs-max) (set pivot-abs-max value-abs pivot-row row-index))
       (set row-index (+ row-index 1)))
@@ -191,8 +197,9 @@
       (set
         index-a (convert-type (+ (* row-index line-count) k-index) sp-time-t)
         index-b (convert-type (+ (* k-index line-count) k-index) sp-time-t))
-      (sp-reverb-complex-divide (array-get matrix-real index-a) (array-get matrix-imag index-a)
-        (array-get matrix-real index-b) (array-get matrix-imag index-b) &scale-real &scale-imag)
+      (sp-reverb-late-complex-divide (array-get matrix-real index-a)
+        (array-get matrix-imag index-a) (array-get matrix-real index-b)
+        (array-get matrix-imag index-b) &scale-real &scale-imag)
       (set
         (array-get matrix-real index-a) scale-real
         (array-get matrix-imag index-a) scale-imag
@@ -214,7 +221,7 @@
     (set k-index (+ k-index 1))))
 
 (define
-  (sp-reverb-lower-upper-solve line-count matrix-real matrix-imag pivot-list right-real right-imag solution-real solution-imag)
+  (sp-reverb-late-lower-upper-solve line-count matrix-real matrix-imag pivot-list right-real right-imag solution-real solution-imag)
   (void sp-time-t sp-sample-t* sp-sample-t* sp-time-t* sp-sample-t* sp-sample-t* sp-sample-t* sp-sample-t*)
   (declare
     row-number sp-time-t
@@ -267,7 +274,7 @@
             (* element-imag (array-get solution-real column-number))))
         column-number (+ column-number 1)))
     (set position (convert-type (+ (* row-number line-count) row-number) sp-time-t))
-    (sp-reverb-complex-divide (array-get solution-real row-number)
+    (sp-reverb-late-complex-divide (array-get solution-real row-number)
       (array-get solution-imag row-number) (array-get matrix-real position)
       (array-get matrix-imag position) &quotient-real &quotient-imag)
     (set
@@ -275,7 +282,7 @@
       (array-get solution-imag row-number) quotient-imag)))
 
 (define
-  (sp-reverb-power-iteration-dominant-eigenpair line-count matrix-real matrix-imag eigenvalue-real eigenvalue-imag eigenvector-real eigenvector-imag iteration-limit)
+  (sp-reverb-late-power-iteration-dominant-eigenpair line-count matrix-real matrix-imag eigenvalue-real eigenvalue-imag eigenvector-real eigenvector-imag iteration-limit)
   (void sp-time-t sp-sample-t* sp-sample-t* sp-sample-t* sp-sample-t* sp-sample-t* sp-sample-t* sp-time-t)
   (declare
     next-vector-real sp-sample-t*
@@ -385,7 +392,7 @@
       row-number (+ row-number 1)))
   (set *eigenvalue-real sum-real *eigenvalue-imag sum-imag))
 
-(define (sp-reverb-eigen-equation-value config radius angle out-real out-imag)
+(define (sp-reverb-late-eigen-equation-value config radius angle out-real out-imag)
   (void sp-reverb-late-config-t* sp-sample-t sp-sample-t sp-sample-t* sp-sample-t*)
   (declare
     line-count sp-time-t
@@ -419,10 +426,10 @@
     (__builtin-alloca (convert-type (* line-count line-count (sizeof sp-sample-t)) size-t))
     pivot-list (__builtin-alloca (convert-type (* line-count (sizeof sp-time-t)) size-t))
     visited-list (__builtin-alloca (convert-type (* line-count (sizeof uint8-t)) size-t)))
-  (sp-reverb-build-feedback-matrix-from-polar config radius angle feedback-real feedback-imag)
-  (sp-reverb-form-identity-minus-feedback line-count feedback-real
+  (sp-reverb-late-build-feedback-matrix-from-polar config radius angle feedback-real feedback-imag)
+  (sp-reverb-late-form-identity-minus-feedback line-count feedback-real
     feedback-imag matrix-real matrix-imag)
-  (sp-reverb-lower-upper-factorization line-count matrix-real matrix-imag pivot-list)
+  (sp-reverb-late-lower-upper-factorization line-count matrix-real matrix-imag pivot-list)
   (set row-number 0)
   (while (< row-number line-count)
     (set (array-get visited-list row-number) 0 row-number (+ row-number 1)))
@@ -455,7 +462,7 @@
   (set *out-real determinant-real *out-imag determinant-imag))
 
 (define
-  (sp-reverb-eigen-equation-jacobian-finite-difference config radius angle out-dfr-dr out-dfr-dtheta out-dfi-dr out-dfi-dtheta)
+  (sp-reverb-late-eigen-equation-jacobian-finite-difference config radius angle out-dfr-dr out-dfr-dtheta out-dfi-dr out-dfi-dtheta)
   (void sp-reverb-late-config-t* sp-sample-t sp-sample-t sp-sample-t* sp-sample-t* sp-sample-t* sp-sample-t*)
   (declare
     radius-step sp-sample-t
@@ -483,10 +490,10 @@
     radius-down (- radius radius-step)
     angle-up (+ angle angle-step)
     angle-down (- angle angle-step))
-  (sp-reverb-eigen-equation-value config radius-up angle &real-up-radius &imag-up-radius)
-  (sp-reverb-eigen-equation-value config radius-down angle &real-down-radius &imag-down-radius)
-  (sp-reverb-eigen-equation-value config radius angle-up &real-up-angle &imag-up-angle)
-  (sp-reverb-eigen-equation-value config radius angle-down &real-down-angle &imag-down-angle)
+  (sp-reverb-late-eigen-equation-value config radius-up angle &real-up-radius &imag-up-radius)
+  (sp-reverb-late-eigen-equation-value config radius-down angle &real-down-radius &imag-down-radius)
+  (sp-reverb-late-eigen-equation-value config radius angle-up &real-up-angle &imag-up-angle)
+  (sp-reverb-late-eigen-equation-value config radius angle-down &real-down-angle &imag-down-angle)
   (set
     span-radius (- radius-up radius-down)
     span-angle (- angle-up angle-down)
@@ -496,7 +503,7 @@
     *out-dfi-dtheta (/ (- imag-up-angle imag-down-angle) span-angle)))
 
 (define
-  (sp-reverb-newton-step-on-eigen-equation radius-current angle-current real-derivative-radius real-derivative-angle imag-derivative-radius imag-derivative-angle real-value imag-value radius-next angle-next)
+  (sp-reverb-late-newton-step-on-eigen-equation radius-current angle-current real-derivative-radius real-derivative-angle imag-derivative-radius imag-derivative-angle real-value imag-value radius-next angle-next)
   (void sp-sample-t sp-sample-t sp-sample-t sp-sample-t sp-sample-t sp-sample-t sp-sample-t sp-sample-t sp-sample-t* sp-sample-t*)
   (declare jacobian-determinant sp-sample-t radius-update sp-sample-t angle-update sp-sample-t)
   (set
@@ -513,86 +520,14 @@
     *radius-next (+ radius-current radius-update)
     *angle-next (+ angle-current angle-update)))
 
-(define (sp-reverb-late-modal config) (sp-reverb-modal-set-t sp-reverb-late-config-t*)
-  (declare
-    modal-set sp-reverb-modal-set-t
-    delay-line-count sp-time-t
-    mode-count sp-time-t
-    mode-index sp-time-t
-    list-size size-t
-    radius-current sp-sample-t
-    angle-current sp-sample-t
-    value-real sp-sample-t
-    value-imag sp-sample-t
-    derivative-real-radius sp-sample-t
-    derivative-real-angle sp-sample-t
-    derivative-imag-radius sp-sample-t
-    derivative-imag-angle sp-sample-t
-    radius-next sp-sample-t
-    angle-next sp-sample-t
-    iteration-index sp-time-t
-    iteration-limit sp-time-t
-    period-float sp-sample-t
-    period-integer sp-time-t
-    decay-float sp-sample-t
-    decay-integer sp-time-t)
-  (set
-    modal-set.mode-list NULL
-    modal-set.mode-count 0
-    delay-line-count config:delay-count
-    mode-count delay-line-count)
-  (if (= mode-count 0) (return modal-set))
-  (set
-    list-size (convert-type mode-count size-t)
-    modal-set.mode-list
-    (convert-type (malloc (* list-size (sizeof sp-reverb-mode-t))) sp-reverb-mode-t*))
-  (if (= modal-set.mode-list NULL) (return modal-set))
-  (set iteration-limit 16 mode-index 0)
-  (while (< mode-index mode-count)
-    (set
-      radius-current 0.9
-      angle-current
-      (/ (* 2.0 sp-pi (+ (convert-type mode-index sp-sample-t) 0.5))
-        (convert-type mode-count sp-sample-t))
-      iteration-index 0)
-    (while (< iteration-index iteration-limit)
-      (sp-reverb-eigen-equation-value config radius-current angle-current &value-real &value-imag)
-      (sp-reverb-eigen-equation-jacobian-finite-difference config radius-current
-        angle-current &derivative-real-radius &derivative-real-angle
-        &derivative-imag-radius &derivative-imag-angle)
-      (sp-reverb-newton-step-on-eigen-equation radius-current angle-current
-        derivative-real-radius derivative-real-angle derivative-imag-radius
-        derivative-imag-angle value-real value-imag &radius-next &angle-next)
-      (set
-        radius-current radius-next
-        angle-current angle-next
-        iteration-index (+ iteration-index 1)))
-    (if (<= radius-current 0.0) (set radius-current 1.0e-6))
-    (if (>= radius-current 1.0) (set radius-current (- 1.0 1.0e-6)))
-    (if (<= angle-current 0.0) (set angle-current 1.0e-6))
-    (set period-float (/ (* 2.0 sp-pi) angle-current))
-    (if (< period-float 1.0) (set period-float 1.0))
-    (set period-integer (convert-type (llround period-float) sp-time-t))
-    (set decay-float (/ 1.0 (- (log radius-current))))
-    (if (< decay-float 1.0) (set decay-float 1.0))
-    (set decay-integer (convert-type (llround decay-float) sp-time-t))
-    (set
-      (struct-get (array-get modal-set.mode-list mode-index) period) period-integer
-      (struct-get (array-get modal-set.mode-list mode-index) decay) decay-integer
-      (struct-get (array-get modal-set.mode-list mode-index) amplitude) config:strength
-      (struct-get (array-get modal-set.mode-list mode-index) phase) 0
-      mode-index (+ mode-index 1)))
-  (set modal-set.mode-count mode-count)
-  (return modal-set))
-
-(define (sp-reverb-build-state-excitation config position out-real out-imag)
+(define (sp-reverb-late-build-state-excitation config position out-real out-imag)
   (void sp-reverb-late-config-t* sp-reverb-position-t* sp-sample-t* sp-sample-t*)
   (declare
     delay-index sp-time-t
     delay-count sp-time-t
     dimension-index sp-time-t
     dimension-count sp-time-t
-    source-unit (array sp-sample-t sph-reverb-position-max-dimensions)
+    source-unit (array sp-sample-t sp-reverb-position-max-dimensions)
     source-norm-square sp-sample-t
     source-norm sp-sample-t
     inverse-source-norm sp-sample-t
@@ -603,7 +538,9 @@
     energy-sum sp-sample-t
     norm-value sp-sample-t
     inverse-norm-value sp-sample-t
-    weight sp-sample-t)
+    weight sp-sample-t
+    value sp-sample-t
+    state-value sp-sample-t)
   (set
     delay-count config:delay-count
     dimension-count config:state-dimension-count
@@ -635,7 +572,6 @@
   (while (< delay-index delay-count)
     (set direction-norm-square 0.0 dimension-index 0)
     (while (< dimension-index dimension-count)
-      (declare value sp-sample-t)
       (set
         value (array-get config:state-directions (+ (* delay-index dimension-count) dimension-index))
         direction-norm-square (+ direction-norm-square (* value value))
@@ -648,7 +584,6 @@
           cosine-value 0.0
           dimension-index 0)
         (while (< dimension-index dimension-count)
-          (declare state-value sp-sample-t)
           (set
             state-value
             (*
@@ -685,134 +620,8 @@
         (while (< delay-index delay-count)
           (set (array-get out-real delay-index) inverse-norm-value delay-index (+ delay-index 1)))))))
 
-(define (sp-reverb-build-state-projection config layout position channel-index out-real out-imag)
-  (void sp-reverb-late-config-t* sp-reverb-layout-t* sp-reverb-position-t* sp-channel-count-t sp-sample-t* sp-sample-t*)
-  (declare
-    delay-index sp-time-t
-    delay-count sp-time-t
-    dimension-index sp-time-t
-    dimension-count sp-time-t
-    basis-length sp-time-t
-    channel-unit (array sp-sample-t sph-reverb-position-max-dimensions)
-    channel-norm-square sp-sample-t
-    channel-norm sp-sample-t
-    inverse-channel-norm sp-sample-t
-    direction-norm-square sp-sample-t
-    direction-norm sp-sample-t
-    inverse-direction-norm sp-sample-t
-    cosine-value sp-sample-t
-    weight sp-sample-t
-    energy-sum sp-sample-t
-    norm-value sp-sample-t
-    inverse-norm-value sp-sample-t
-    pan-position-normalized sp-sample-t
-    pan-gain sp-sample-t)
-  (set
-    delay-count config:delay-count
-    dimension-count config:state-dimension-count
-    basis-length layout:basis-length
-    channel-norm-square 0.0
-    dimension-index 0)
-  (while (< dimension-index dimension-count)
-    (declare channel-value sp-sample-t)
-    (if (< dimension-index basis-length)
-      (set channel-value
-        (array-get layout:bases
-          (+ (* (convert-type channel-index sp-time-t) basis-length) dimension-index)))
-      (set channel-value 0.0))
-    (set
-      (array-get channel-unit dimension-index) channel-value
-      channel-norm-square (+ channel-norm-square (* channel-value channel-value))
-      dimension-index (+ dimension-index 1)))
-  (if (> channel-norm-square 0.0)
-    (begin
-      (set
-        channel-norm (sqrt channel-norm-square)
-        inverse-channel-norm (/ 1.0 channel-norm)
-        dimension-index 0)
-      (while (< dimension-index dimension-count)
-        (set
-          (array-get channel-unit dimension-index)
-          (* (array-get channel-unit dimension-index) inverse-channel-norm)
-          dimension-index (+ dimension-index 1))))
-    (begin
-      (set dimension-index 0)
-      (while (< dimension-index dimension-count)
-        (set (array-get channel-unit dimension-index) 0.0 dimension-index (+ dimension-index 1)))))
-  (if (> dimension-count 0)
-    (begin
-      (set pan-position-normalized (* (+ (array-get position:values 0) 1.0) 0.5))
-      (if (< pan-position-normalized 0.0) (set pan-position-normalized 0.0))
-      (if (> pan-position-normalized 1.0) (set pan-position-normalized 1.0))
-      (if (> basis-length 0)
-        (begin
-          (declare channel-axis-value sp-sample-t)
-          (set channel-axis-value
-            (array-get layout:bases (* (convert-type channel-index sp-time-t) basis-length)))
-          (if (< channel-axis-value 0.0) (set pan-gain (sqrt (- 1.0 pan-position-normalized)))
-            (if (> channel-axis-value 0.0) (set pan-gain (sqrt pan-position-normalized))
-              (set pan-gain 1.0))))
-        (set pan-gain 1.0)))
-    (set pan-gain 1.0))
-  (set delay-index 0)
-  (while (< delay-index delay-count)
-    (set direction-norm-square 0.0 dimension-index 0)
-    (while (< dimension-index dimension-count)
-      (declare value sp-sample-t)
-      (set
-        value (array-get config:state-directions (+ (* delay-index dimension-count) dimension-index))
-        direction-norm-square (+ direction-norm-square (* value value))
-        dimension-index (+ dimension-index 1)))
-    (if (and (> direction-norm-square 0.0) (> channel-norm-square 0.0))
-      (begin
-        (set
-          direction-norm (sqrt direction-norm-square)
-          inverse-direction-norm (/ 1.0 direction-norm)
-          cosine-value 0.0
-          dimension-index 0)
-        (while (< dimension-index dimension-count)
-          (declare state-value sp-sample-t)
-          (set
-            state-value
-            (*
-              (array-get config:state-directions
-                (+ (* delay-index dimension-count) dimension-index))
-              inverse-direction-norm)
-            cosine-value (+ cosine-value (* state-value (array-get channel-unit dimension-index)))
-            dimension-index (+ dimension-index 1)))
-        (if (< cosine-value 0.0) (set cosine-value 0.0))
-        (set weight cosine-value))
-      (set weight 1.0))
-    (set
-      (array-get out-real delay-index) weight
-      (array-get out-imag delay-index) 0.0
-      delay-index (+ delay-index 1)))
-  (set energy-sum 0.0 delay-index 0)
-  (while (< delay-index delay-count)
-    (set
-      energy-sum (+ energy-sum (* (array-get out-real delay-index) (array-get out-real delay-index)))
-      delay-index (+ delay-index 1)))
-  (if (> energy-sum 0.0)
-    (begin
-      (set norm-value (sqrt energy-sum) inverse-norm-value (/ 1.0 norm-value) delay-index 0)
-      (while (< delay-index delay-count)
-        (set
-          (array-get out-real delay-index)
-          (* (array-get out-real delay-index) inverse-norm-value pan-gain)
-          delay-index (+ delay-index 1))))
-    (if (> delay-count 0)
-      (begin
-        (set
-          norm-value (sqrt (convert-type delay-count sp-sample-t))
-          inverse-norm-value (/ 1.0 norm-value)
-          delay-index 0)
-        (while (< delay-index delay-count)
-          (set
-            (array-get out-real delay-index) (* inverse-norm-value pan-gain)
-            delay-index (+ delay-index 1)))))))
-
 (define
-  (sp-reverb-null-vector-of-shifted-matrix line-count a-real a-imag use-transpose out-real out-imag)
+  (sp-reverb-late-null-vector-of-shifted-matrix line-count a-real a-imag use-transpose out-real out-imag)
   (void sp-time-t sp-sample-t* sp-sample-t* int sp-sample-t* sp-sample-t*)
   (declare
     reduced-count sp-time-t
@@ -874,8 +683,8 @@
             (array-get right-imag reduced-row) (- 0.0 (array-get a-imag index-full))
             reduced-row (+ reduced-row 1))))
       (set row-index (+ row-index 1)))
-    (sp-reverb-lower-upper-factorization reduced-count reduced-real reduced-imag pivot-list)
-    (sp-reverb-lower-upper-solve reduced-count reduced-real
+    (sp-reverb-late-lower-upper-factorization reduced-count reduced-real reduced-imag pivot-list)
+    (sp-reverb-late-lower-upper-solve reduced-count reduced-real
       reduced-imag pivot-list right-real right-imag solution-real solution-imag)
     (set row-index 0)
     (while (< row-index line-count)
@@ -905,27 +714,208 @@
             (array-get out-imag row-index) (* (array-get out-imag row-index) inverse-norm-value)
             row-index (+ row-index 1)))))))
 
-(define (sp-reverb-right-eigenvector-at-pole config radius angle out-real out-imag)
-  (void sp-reverb-late-config-t* sp-sample-t sp-sample-t sp-sample-t* sp-sample-t*)
+(define (sp-reverb-late-modal config) (sp-reverb-late-modal-set-t sp-reverb-late-config-t*)
   (declare
-    line-count sp-time-t
-    feedback-real sp-sample-t*
-    feedback-imag sp-sample-t*
-    a-real sp-sample-t*
-    a-imag sp-sample-t*)
+    modal-set sp-reverb-late-modal-set-t
+    delay-line-count sp-time-t
+    mode-count sp-time-t
+    mode-index sp-time-t
+    list-size size-t
+    radius-current sp-sample-t
+    angle-current sp-sample-t
+    value-real sp-sample-t
+    value-imag sp-sample-t
+    derivative-real-radius sp-sample-t
+    derivative-real-angle sp-sample-t
+    derivative-imag-radius sp-sample-t
+    derivative-imag-angle sp-sample-t
+    radius-next sp-sample-t
+    angle-next sp-sample-t
+    iteration-index sp-time-t
+    iteration-limit sp-time-t
+    period-float sp-sample-t
+    period-integer sp-time-t
+    decay-float sp-sample-t
+    decay-integer sp-time-t)
   (set
-    line-count config:delay-count
-    feedback-real
-    (__builtin-alloca (convert-type (* line-count line-count (sizeof sp-sample-t)) size-t))
-    feedback-imag
-    (__builtin-alloca (convert-type (* line-count line-count (sizeof sp-sample-t)) size-t))
-    a-real (__builtin-alloca (convert-type (* line-count line-count (sizeof sp-sample-t)) size-t))
-    a-imag (__builtin-alloca (convert-type (* line-count line-count (sizeof sp-sample-t)) size-t)))
-  (sp-reverb-build-feedback-matrix-from-polar config radius angle feedback-real feedback-imag)
-  (sp-reverb-form-identity-minus-feedback line-count feedback-real feedback-imag a-real a-imag)
-  (sp-reverb-null-vector-of-shifted-matrix line-count a-real a-imag 0 out-real out-imag))
+    modal-set.mode-list 0
+    modal-set.mode-count 0
+    delay-line-count config:delay-count
+    mode-count delay-line-count)
+  (if (= mode-count 0) (return modal-set))
+  (set
+    list-size (convert-type mode-count size-t)
+    modal-set.mode-list
+    (convert-type (malloc (* list-size (sizeof sp-reverb-late-mode-t))) sp-reverb-late-mode-t*))
+  (if (= modal-set.mode-list 0) (return modal-set))
+  (set iteration-limit 16 mode-index 0)
+  (while (< mode-index mode-count)
+    (set
+      radius-current 0.9
+      angle-current
+      (/ (* 2.0 sp-pi (+ (convert-type mode-index sp-sample-t) 0.5))
+        (convert-type mode-count sp-sample-t))
+      iteration-index 0)
+    (while (< iteration-index iteration-limit)
+      (sp-reverb-late-eigen-equation-value config radius-current
+        angle-current &value-real &value-imag)
+      (sp-reverb-late-eigen-equation-jacobian-finite-difference config radius-current
+        angle-current &derivative-real-radius &derivative-real-angle
+        &derivative-imag-radius &derivative-imag-angle)
+      (sp-reverb-late-newton-step-on-eigen-equation radius-current angle-current
+        derivative-real-radius derivative-real-angle derivative-imag-radius
+        derivative-imag-angle value-real value-imag &radius-next &angle-next)
+      (set
+        radius-current radius-next
+        angle-current angle-next
+        iteration-index (+ iteration-index 1)))
+    (if (<= radius-current 0.0) (set radius-current 1.0e-6))
+    (if (>= radius-current 1.0) (set radius-current (- 1.0 1.0e-6)))
+    (if (<= angle-current 0.0) (set angle-current 1.0e-6))
+    (set period-float (/ (* 2.0 sp-pi) angle-current))
+    (if (< period-float 1.0) (set period-float 1.0))
+    (set
+      period-integer (convert-type (llround period-float) sp-time-t)
+      decay-float (/ 1.0 (- (log radius-current))))
+    (if (< decay-float 1.0) (set decay-float 1.0))
+    (set
+      decay-integer (convert-type (llround decay-float) sp-time-t)
+      (struct-get (array-get modal-set.mode-list mode-index) period) period-integer
+      (struct-get (array-get modal-set.mode-list mode-index) decay) decay-integer
+      mode-index (+ mode-index 1)))
+  (set modal-set.mode-count mode-count)
+  (return modal-set))
 
-(define (sp-reverb-left-eigenvector-at-pole config radius angle out-real out-imag)
+(define
+  (sp-reverb-late-build-state-projection config layout position channel-index out-real out-imag)
+  (void sp-reverb-late-config-t* sp-reverb-layout-t* sp-reverb-position-t* sp-channel-count-t sp-sample-t* sp-sample-t*)
+  (declare
+    delay-index sp-time-t
+    delay-count sp-time-t
+    dimension-index sp-time-t
+    dimension-count sp-time-t
+    basis-length sp-time-t
+    channel-unit (array sp-sample-t sp-reverb-position-max-dimensions)
+    channel-norm-square sp-sample-t
+    channel-norm sp-sample-t
+    inverse-channel-norm sp-sample-t
+    direction-norm-square sp-sample-t
+    direction-norm sp-sample-t
+    inverse-direction-norm sp-sample-t
+    cosine-value sp-sample-t
+    weight sp-sample-t
+    energy-sum sp-sample-t
+    norm-value sp-sample-t
+    inverse-norm-value sp-sample-t
+    pan-position-normalized sp-sample-t
+    pan-gain sp-sample-t
+    channel-value sp-sample-t
+    channel-axis-value sp-sample-t
+    value sp-sample-t
+    state-value sp-sample-t)
+  (set
+    delay-count config:delay-count
+    dimension-count config:state-dimension-count
+    basis-length layout:basis-length
+    channel-norm-square 0.0
+    dimension-index 0)
+  (while (< dimension-index dimension-count)
+    (if (< dimension-index basis-length)
+      (set channel-value
+        (array-get layout:bases
+          (convert-type (+ (* (convert-type channel-index sp-time-t) basis-length) dimension-index)
+            sp-time-t)))
+      (set channel-value 0.0))
+    (set
+      (array-get channel-unit dimension-index) channel-value
+      channel-norm-square (+ channel-norm-square (* channel-value channel-value))
+      dimension-index (+ dimension-index 1)))
+  (if (> channel-norm-square 0.0)
+    (begin
+      (set
+        channel-norm (sqrt channel-norm-square)
+        inverse-channel-norm (/ 1.0 channel-norm)
+        dimension-index 0)
+      (while (< dimension-index dimension-count)
+        (set
+          (array-get channel-unit dimension-index)
+          (* (array-get channel-unit dimension-index) inverse-channel-norm)
+          dimension-index (+ dimension-index 1))))
+    (begin
+      (set dimension-index 0)
+      (while (< dimension-index dimension-count)
+        (set (array-get channel-unit dimension-index) 0.0 dimension-index (+ dimension-index 1)))))
+  (if (> dimension-count 0)
+    (begin
+      (set pan-position-normalized (* (+ (array-get position:values 0) 1.0) 0.5))
+      (if (< pan-position-normalized 0.0) (set pan-position-normalized 0.0))
+      (if (> pan-position-normalized 1.0) (set pan-position-normalized 1.0))
+      (if (> basis-length 0)
+        (begin
+          (set channel-axis-value
+            (array-get layout:bases
+              (convert-type (* (convert-type channel-index sp-time-t) basis-length) sp-time-t)))
+          (if (< channel-axis-value 0.0) (set pan-gain (sqrt (- 1.0 pan-position-normalized)))
+            (if (> channel-axis-value 0.0) (set pan-gain (sqrt pan-position-normalized))
+              (set pan-gain 1.0))))
+        (set pan-gain 1.0)))
+    (set pan-gain 1.0))
+  (set delay-index 0)
+  (while (< delay-index delay-count)
+    (set direction-norm-square 0.0 dimension-index 0)
+    (while (< dimension-index dimension-count)
+      (set
+        value (array-get config:state-directions (+ (* delay-index dimension-count) dimension-index))
+        direction-norm-square (+ direction-norm-square (* value value))
+        dimension-index (+ dimension-index 1)))
+    (if (and (> direction-norm-square 0.0) (> channel-norm-square 0.0))
+      (begin
+        (set
+          direction-norm (sqrt direction-norm-square)
+          inverse-direction-norm (/ 1.0 direction-norm)
+          cosine-value 0.0
+          dimension-index 0)
+        (while (< dimension-index dimension-count)
+          (set
+            state-value
+            (*
+              (array-get config:state-directions
+                (+ (* delay-index dimension-count) dimension-index))
+              inverse-direction-norm)
+            cosine-value (+ cosine-value (* state-value (array-get channel-unit dimension-index)))
+            dimension-index (+ dimension-index 1)))
+        (if (< cosine-value 0.0) (set cosine-value 0.0))
+        (set weight cosine-value))
+      (set weight 1.0))
+    (set
+      (array-get out-real delay-index) weight
+      (array-get out-imag delay-index) 0.0
+      delay-index (+ delay-index 1)))
+  (set energy-sum 0.0 delay-index 0)
+  (while (< delay-index delay-count)
+    (set
+      energy-sum (+ energy-sum (* (array-get out-real delay-index) (array-get out-real delay-index)))
+      delay-index (+ delay-index 1)))
+  (if (> energy-sum 0.0)
+    (begin
+      (set norm-value (sqrt energy-sum) inverse-norm-value (/ 1.0 norm-value) delay-index 0)
+      (while (< delay-index delay-count)
+        (set
+          (array-get out-real delay-index)
+          (* (array-get out-real delay-index) inverse-norm-value pan-gain)
+          delay-index (+ delay-index 1))))
+    (if (> delay-count 0)
+      (begin
+        (set
+          norm-value (sqrt (convert-type delay-count sp-sample-t))
+          inverse-norm-value (/ 1.0 norm-value)
+          delay-index 0)
+        (while (< delay-index delay-count)
+          (set
+            (array-get out-real delay-index) (* inverse-norm-value pan-gain)
+            delay-index (+ delay-index 1)))))))
+
+(define (sp-reverb-late-right-eigenvector-at-pole config radius angle out-real out-imag)
   (void sp-reverb-late-config-t* sp-sample-t sp-sample-t sp-sample-t* sp-sample-t*)
   (declare
     line-count sp-time-t
@@ -941,12 +931,32 @@
     (__builtin-alloca (convert-type (* line-count line-count (sizeof sp-sample-t)) size-t))
     a-real (__builtin-alloca (convert-type (* line-count line-count (sizeof sp-sample-t)) size-t))
     a-imag (__builtin-alloca (convert-type (* line-count line-count (sizeof sp-sample-t)) size-t)))
-  (sp-reverb-build-feedback-matrix-from-polar config radius angle feedback-real feedback-imag)
-  (sp-reverb-form-identity-minus-feedback line-count feedback-real feedback-imag a-real a-imag)
-  (sp-reverb-null-vector-of-shifted-matrix line-count a-real a-imag 1 out-real out-imag))
+  (sp-reverb-late-build-feedback-matrix-from-polar config radius angle feedback-real feedback-imag)
+  (sp-reverb-late-form-identity-minus-feedback line-count feedback-real feedback-imag a-real a-imag)
+  (sp-reverb-late-null-vector-of-shifted-matrix line-count a-real a-imag 0 out-real out-imag))
+
+(define (sp-reverb-late-left-eigenvector-at-pole config radius angle out-real out-imag)
+  (void sp-reverb-late-config-t* sp-sample-t sp-sample-t sp-sample-t* sp-sample-t*)
+  (declare
+    line-count sp-time-t
+    feedback-real sp-sample-t*
+    feedback-imag sp-sample-t*
+    a-real sp-sample-t*
+    a-imag sp-sample-t*)
+  (set
+    line-count config:delay-count
+    feedback-real
+    (__builtin-alloca (convert-type (* line-count line-count (sizeof sp-sample-t)) size-t))
+    feedback-imag
+    (__builtin-alloca (convert-type (* line-count line-count (sizeof sp-sample-t)) size-t))
+    a-real (__builtin-alloca (convert-type (* line-count line-count (sizeof sp-sample-t)) size-t))
+    a-imag (__builtin-alloca (convert-type (* line-count line-count (sizeof sp-sample-t)) size-t)))
+  (sp-reverb-late-build-feedback-matrix-from-polar config radius angle feedback-real feedback-imag)
+  (sp-reverb-late-form-identity-minus-feedback line-count feedback-real feedback-imag a-real a-imag)
+  (sp-reverb-late-null-vector-of-shifted-matrix line-count a-real a-imag 1 out-real out-imag))
 
 (define (sp-reverb-late-modal-residues config poles layout position out-modes)
-  (void sp-reverb-late-config-t* sp-reverb-modal-set-t* sp-reverb-layout-t* sp-reverb-position-t* sp-reverb-channel-modal-set-t*)
+  (void sp-reverb-late-config-t* sp-reverb-late-modal-set-t* sp-reverb-layout-t* sp-reverb-position-t* sp-reverb-late-channel-modal-set-t*)
   (declare
     state-count sp-time-t
     mode-count sp-time-t
@@ -982,10 +992,12 @@
     phase-angle sp-sample-t
     phase-samples sp-time-t
     state-index sp-time-t
-    mode-array sp-reverb-mode-t*)
+    channel-mode-index size-t)
   (set
-    out-modes:mode-list NULL
+    out-modes:mode-list 0
     out-modes:mode-count 0
+    out-modes:amplitude-list 0
+    out-modes:phase-list 0
     out-modes:channel-count 0
     state-count config:delay-count
     mode-count poles:mode-count
@@ -995,35 +1007,51 @@
   (if (= channel-count 0) (return))
   (set
     total-mode-count (* (convert-type mode-count size-t) (convert-type channel-count size-t))
-    mode-array
-    (convert-type (malloc (* total-mode-count (sizeof sp-reverb-mode-t))) sp-reverb-mode-t*))
-  (if (= mode-array NULL) (return))
+    out-modes:mode-list poles:mode-list
+    out-modes:mode-count mode-count
+    out-modes:channel-count channel-count
+    out-modes:amplitude-list
+    (convert-type (malloc (* total-mode-count (sizeof sp-sample-t))) sp-sample-t*))
+  (if (= out-modes:amplitude-list 0)
+    (begin (set out-modes:mode-list 0 out-modes:mode-count 0 out-modes:channel-count 0) (return)))
+  (set out-modes:phase-list
+    (convert-type (malloc (* total-mode-count (sizeof sp-time-t))) sp-time-t*))
+  (if (= out-modes:phase-list 0)
+    (begin
+      (free out-modes:amplitude-list)
+      (set
+        out-modes:amplitude-list 0
+        out-modes:mode-list 0
+        out-modes:mode-count 0
+        out-modes:channel-count 0)
+      (return)))
   (set
     state-excitation-real
-    (convert-type (__builtin-alloca (* (convert-type state-count size-t) (sizeof sp-sample-t)))
+    (convert-type (__builtin_alloca (* (convert-type state-count size-t) (sizeof sp-sample-t)))
       sp-sample-t*)
     state-excitation-imag
-    (convert-type (__builtin-alloca (* (convert-type state-count size-t) (sizeof sp-sample-t)))
+    (convert-type (__builtin_alloca (* (convert-type state-count size-t) (sizeof sp-sample-t)))
       sp-sample-t*)
     right-vector-real
-    (convert-type (__builtin-alloca (* (convert-type state-count size-t) (sizeof sp-sample-t)))
+    (convert-type (__builtin_alloca (* (convert-type state-count size-t) (sizeof sp-sample-t)))
       sp-sample-t*)
     right-vector-imag
-    (convert-type (__builtin-alloca (* (convert-type state-count size-t) (sizeof sp-sample-t)))
+    (convert-type (__builtin_alloca (* (convert-type state-count size-t) (sizeof sp-sample-t)))
       sp-sample-t*)
     left-vector-real
-    (convert-type (__builtin-alloca (* (convert-type state-count size-t) (sizeof sp-sample-t)))
+    (convert-type (__builtin_alloca (* (convert-type state-count size-t) (sizeof sp-sample-t)))
       sp-sample-t*)
     left-vector-imag
-    (convert-type (__builtin-alloca (* (convert-type state-count size-t) (sizeof sp-sample-t)))
+    (convert-type (__builtin_alloca (* (convert-type state-count size-t) (sizeof sp-sample-t)))
       sp-sample-t*)
     channel-projection-real
-    (convert-type (__builtin-alloca (* (convert-type state-count size-t) (sizeof sp-sample-t)))
+    (convert-type (__builtin_alloca (* (convert-type state-count size-t) (sizeof sp-sample-t)))
       sp-sample-t*)
     channel-projection-imag
-    (convert-type (__builtin-alloca (* (convert-type state-count size-t) (sizeof sp-sample-t)))
+    (convert-type (__builtin_alloca (* (convert-type state-count size-t) (sizeof sp-sample-t)))
       sp-sample-t*))
-  (sp-reverb-build-state-excitation config position state-excitation-real state-excitation-imag)
+  (sp-reverb-late-build-state-excitation config position
+    state-excitation-real state-excitation-imag)
   (set mode-index 0)
   (while (< mode-index mode-count)
     (set
@@ -1034,9 +1062,9 @@
     (if (<= period-value 0.0) (set period-value 1.0))
     (if (<= decay-value 0.0) (set decay-value 1.0))
     (set angle-value (/ (* 2.0 sp-pi) period-value) radius-value (exp (/ -1.0 decay-value)))
-    (sp-reverb-right-eigenvector-at-pole config radius-value
+    (sp-reverb-late-right-eigenvector-at-pole config radius-value
       angle-value right-vector-real right-vector-imag)
-    (sp-reverb-left-eigenvector-at-pole config radius-value
+    (sp-reverb-late-left-eigenvector-at-pole config radius-value
       angle-value left-vector-real left-vector-imag)
     (set s-real 0.0 s-imag 0.0 state-index 0)
     (while (< state-index state-count)
@@ -1064,9 +1092,9 @@
         n-real (+ n-real sum-real)
         n-imag (+ n-imag sum-imag)
         state-index (+ state-index 1)))
-    (set st-real 0.0 st-imag 0.0 channel-index 0)
+    (set channel-index 0)
     (while (< channel-index channel-count)
-      (sp-reverb-build-state-projection config layout
+      (sp-reverb-late-build-state-projection config layout
         position channel-index channel-projection-real channel-projection-imag)
       (set t-real 0.0 t-imag 0.0 state-index 0)
       (while (< state-index state-count)
@@ -1089,39 +1117,16 @@
       (set
         st-real (- (* s-real t-real) (* s-imag t-imag))
         st-imag (+ (* s-real t-imag) (* s-imag t-real)))
-      (sp-reverb-complex-divide st-real st-imag n-real n-imag &alpha-real &alpha-imag)
+      (sp-reverb-late-complex-divide st-real st-imag n-real n-imag &alpha-real &alpha-imag)
       (set
-        amplitude-value (sp-reverb-complex-magnitude alpha-real alpha-imag)
-        phase-angle (sp-reverb-complex-argument alpha-real alpha-imag)
+        amplitude-value (sp-reverb-late-complex-magnitude alpha-real alpha-imag)
+        phase-angle (sp-reverb-late-complex-argument alpha-real alpha-imag)
         phase-samples
-        (convert-type (llround (/ (* phase-angle period-value) (* 2.0 sp-pi))) sp-time-t))
-      (set
-        (struct-get
-          (array-get mode-array
-            (+ (* (convert-type channel-index size-t) (convert-type mode-count size-t))
-              (convert-type mode-index size-t)))
-          period)
-        (struct-get (array-get poles:mode-list mode-index) period)
-        (struct-get
-          (array-get mode-array
-            (+ (* (convert-type channel-index size-t) (convert-type mode-count size-t))
-              (convert-type mode-index size-t)))
-          decay)
-        (struct-get (array-get poles:mode-list mode-index) decay)
-        (struct-get
-          (array-get mode-array
-            (+ (* (convert-type channel-index size-t) (convert-type mode-count size-t))
-              (convert-type mode-index size-t)))
-          amplitude)
-        amplitude-value
-        (struct-get
-          (array-get mode-array
-            (+ (* (convert-type channel-index size-t) (convert-type mode-count size-t))
-              (convert-type mode-index size-t)))
-          phase)
-        phase-samples channel-index (+ channel-index 1)))
-    (set+ mode-index 1))
-  (set
-    out-modes:mode-list mode-array
-    out-modes:mode-count mode-count
-    out-modes:channel-count channel-count))
+        (convert-type (llround (/ (* phase-angle period-value) (* 2.0 sp-pi))) sp-time-t)
+        channel-mode-index
+        (+ (* (convert-type channel-index size-t) (convert-type mode-count size-t))
+          (convert-type mode-index size-t))
+        (array-get out-modes:amplitude-list channel-mode-index) amplitude-value
+        (array-get out-modes:phase-list channel-mode-index) phase-samples)
+      (set+ channel-index 1))
+    (set+ mode-index 1)))

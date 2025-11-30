@@ -1,26 +1,72 @@
 (pre-include "stdlib.h" "math.h" "sph-reverb/sph/test.h" "sph-reverb/sph-reverb.h")
 (pre-define (feq a b) (<= (fabs (- a b)) 1.0e-12) sp-pi-half 1.5707963267948966)
 
-(define (test-sph-reverb-complex-primitives) (status-t)
+(declare
+  (sp-reverb-late-complex-divide a-real a-imag b-real b-imag out-real out-imag)
+  (void sp-sample-t sp-sample-t sp-sample-t sp-sample-t sp-sample-t* sp-sample-t*)
+  (sp-reverb-late-complex-magnitude value-real value-imag) (sp-sample-t sp-sample-t sp-sample-t)
+  (sp-reverb-late-complex-argument value-real value-imag) (sp-sample-t sp-sample-t sp-sample-t)
+  (sp-reverb-late-band-gain-at config period) (sp-sample-t sp-reverb-late-config-t* sp-time-t)
+  (sp-reverb-late-build-feedback-matrix config period matrix-real matrix-imag)
+  (void sp-reverb-late-config-t* sp-time-t sp-sample-t* sp-sample-t*)
+  (sp-reverb-late-build-feedback-matrix-from-polar config radius angle matrix-real matrix-imag)
+  (void sp-reverb-late-config-t* sp-sample-t sp-sample-t sp-sample-t* sp-sample-t*)
+  (sp-reverb-late-form-identity-minus-feedback line-count feedback-real feedback-imag a-real a-imag)
+  (void sp-time-t sp-sample-t* sp-sample-t* sp-sample-t* sp-sample-t*)
+  (sp-reverb-late-lower-upper-factorization line-count matrix-real matrix-imag pivot-index-list)
+  (void sp-time-t sp-sample-t* sp-sample-t* sp-time-t*)
+  (sp-reverb-late-lower-upper-solve line-count matrix-real
+    matrix-imag pivot-list right-real right-imag solution-real solution-imag)
+  (void sp-time-t sp-sample-t*
+    sp-sample-t* sp-time-t* sp-sample-t* sp-sample-t* sp-sample-t* sp-sample-t*)
+  (sp-reverb-late-power-iteration-dominant-eigenpair line-count matrix-real
+    matrix-imag eigenvalue-real eigenvalue-imag eigenvector-real eigenvector-imag iteration-limit)
+  (void sp-time-t sp-sample-t*
+    sp-sample-t* sp-sample-t* sp-sample-t* sp-sample-t* sp-sample-t* sp-time-t)
+  (sp-reverb-late-eigen-equation-value config radius angle out-real out-imag)
+  (void sp-reverb-late-config-t* sp-sample-t sp-sample-t sp-sample-t* sp-sample-t*)
+  (sp-reverb-late-eigen-equation-jacobian-finite-difference config radius
+    angle out-dfr-dr out-dfr-dtheta out-dfi-dr out-dfi-dtheta)
+  (void sp-reverb-late-config-t* sp-sample-t
+    sp-sample-t sp-sample-t* sp-sample-t* sp-sample-t* sp-sample-t*)
+  (sp-reverb-late-newton-step-on-eigen-equation radius-current angle-current
+    real-derivative-radius real-derivative-angle imag-derivative-radius
+    imag-derivative-angle real-value imag-value radius-next angle-next)
+  (void sp-sample-t sp-sample-t
+    sp-sample-t sp-sample-t sp-sample-t sp-sample-t sp-sample-t sp-sample-t sp-sample-t* sp-sample-t*)
+  (sp-reverb-late-build-state-excitation config position out-real out-imag)
+  (void sp-reverb-late-config-t* sp-reverb-position-t* sp-sample-t* sp-sample-t*)
+  (sp-reverb-late-null-vector-of-shifted-matrix line-count a-real
+    a-imag use-transpose out-real out-imag)
+  (void sp-time-t sp-sample-t* sp-sample-t* int sp-sample-t* sp-sample-t*)
+  (sp-reverb-late-build-state-projection config layout position channel-index out-real out-imag)
+  (void sp-reverb-late-config-t* sp-reverb-layout-t*
+    sp-reverb-position-t* sp-channel-count-t sp-sample-t* sp-sample-t*)
+  (sp-reverb-late-right-eigenvector-at-pole config radius angle out-real out-imag)
+  (void sp-reverb-late-config-t* sp-sample-t sp-sample-t sp-sample-t* sp-sample-t*)
+  (sp-reverb-late-left-eigenvector-at-pole config radius angle out-real out-imag)
+  (void sp-reverb-late-config-t* sp-sample-t sp-sample-t sp-sample-t* sp-sample-t*))
+
+(define (test-sp-reverb-late-complex-primitives) status-t
   status-declare
   (declare
     real-value sp-sample-t
     imag-value sp-sample-t
     mag-value sp-sample-t
     arg-value sp-sample-t)
-  (sp-reverb-complex-divide 1.0 0.0 1.0 0.0 &real-value &imag-value)
+  (sp-reverb-late-complex-divide 1.0 0.0 1.0 0.0 &real-value &imag-value)
   (test-helper-assert "complex_divide_1_real" (feq real-value 1.0))
   (test-helper-assert "complex_divide_1_imag" (feq imag-value 0.0))
-  (sp-reverb-complex-divide 1.0 1.0 1.0 0.0 &real-value &imag-value)
+  (sp-reverb-late-complex-divide 1.0 1.0 1.0 0.0 &real-value &imag-value)
   (test-helper-assert "complex_divide_2_real" (feq real-value 1.0))
   (test-helper-assert "complex_divide_2_imag" (feq imag-value 1.0))
-  (set mag-value (sp-reverb-complex-magnitude 3.0 4.0))
+  (set mag-value (sp-reverb-late-complex-magnitude 3.0 4.0))
   (test-helper-assert "complex_mag_3_4" (feq mag-value 5.0))
-  (set arg-value (sp-reverb-complex-argument 0.0 1.0))
+  (set arg-value (sp-reverb-late-complex-argument 0.0 1.0))
   (test-helper-assert "complex_arg_pi_over_2" (feq arg-value sp-pi-half))
   (label exit status-return))
 
-(define (test-sph-reverb-feedback-matrix-basic) (status-t)
+(define (test-sp-reverb-late-feedback-matrix-basic) status-t
   status-declare
   (declare
     config sp-reverb-late-config-t
@@ -43,17 +89,18 @@
     config.strength 0.5
     config.state-directions NULL
     config.state-dimension-count 0
-    band-gain (sp-reverb-band-gain-at &config 200))
+    band-gain (sp-reverb-late-band-gain-at &config 200))
   (test-helper-assert "band_gain_not_nan" (not (isnan band-gain)))
-  (sp-reverb-build-feedback-matrix &config 200 matrix-real matrix-imag)
+  (sp-reverb-late-build-feedback-matrix &config 200 matrix-real matrix-imag)
   (test-helper-assert "feedback_matrix_real_not_nan" (not (isnan (array-get matrix-real 0))))
   (test-helper-assert "feedback_matrix_imag_not_nan" (not (isnan (array-get matrix-imag 0))))
-  (sp-reverb-build-feedback-matrix-from-polar &config 0.8 (* sp-pi 0.25) matrix-real matrix-imag)
+  (sp-reverb-late-build-feedback-matrix-from-polar &config 0.8
+    (* sp-pi 0.25) matrix-real matrix-imag)
   (test-helper-assert "feedback_matrix_polar_real_not_nan" (not (isnan (array-get matrix-real 0))))
   (test-helper-assert "feedback_matrix_polar_imag_not_nan" (not (isnan (array-get matrix-imag 0))))
   (label exit status-return))
 
-(define (test-sph-reverb-lu-and-solve-basic) (status-t)
+(define (test-sp-reverb-late-lu-and-solve-basic) status-t
   status-declare
   (declare
     matrix-real (array sp-sample-t 4)
@@ -76,8 +123,8 @@
     (array-get right-real 1) 1.0
     (array-get right-imag 0) 0.0
     (array-get right-imag 1) 0.0)
-  (sp-reverb-lower-upper-factorization 2 matrix-real matrix-imag pivot-list)
-  (sp-reverb-lower-upper-solve 2 matrix-real
+  (sp-reverb-late-lower-upper-factorization 2 matrix-real matrix-imag pivot-list)
+  (sp-reverb-late-lower-upper-solve 2 matrix-real
     matrix-imag pivot-list right-real right-imag solution-real solution-imag)
   (test-helper-assert "lu_solve_real_0_not_nan" (not (isnan (array-get solution-real 0))))
   (test-helper-assert "lu_solve_real_1_not_nan" (not (isnan (array-get solution-real 1))))
@@ -85,7 +132,7 @@
   (test-helper-assert "lu_solve_imag_1_not_nan" (not (isnan (array-get solution-imag 1))))
   (label exit status-return))
 
-(define (test-sph-reverb-state-spatial-basic) (status-t)
+(define (test-sp-reverb-late-state-spatial-basic) status-t
   status-declare
   (declare
     config sp-reverb-late-config-t
@@ -116,23 +163,23 @@
     layout.bases bases
     layout.channel-count 2
     layout.basis-length 1)
-  (sp-reverb-build-state-excitation &config &position vec-real vec-imag)
+  (sp-reverb-late-build-state-excitation &config &position vec-real vec-imag)
   (test-helper-assert "state_excitation_real_0_not_nan" (not (isnan (array-get vec-real 0))))
   (test-helper-assert "state_excitation_real_1_not_nan" (not (isnan (array-get vec-real 1))))
   (test-helper-assert "state_excitation_imag_0_zero" (feq (array-get vec-imag 0) 0.0))
   (test-helper-assert "state_excitation_imag_1_zero" (feq (array-get vec-imag 1) 0.0))
-  (sp-reverb-build-state-projection &config &layout &position 0 vec-real vec-imag)
+  (sp-reverb-late-build-state-projection &config &layout &position 0 vec-real vec-imag)
   (test-helper-assert "state_projection_real_0_not_nan" (not (isnan (array-get vec-real 0))))
   (test-helper-assert "state_projection_real_1_not_nan" (not (isnan (array-get vec-real 1))))
   (test-helper-assert "state_projection_imag_0_zero" (feq (array-get vec-imag 0) 0.0))
   (test-helper-assert "state_projection_imag_1_zero" (feq (array-get vec-imag 1) 0.0))
   (label exit status-return))
 
-(define (test-sph-reverb-modal-basic) (status-t)
+(define (test-sp-reverb-late-modal-basic) status-t
   status-declare
   (declare
     config sp-reverb-late-config-t
-    poles sp-reverb-modal-set-t
+    poles sp-reverb-late-modal-set-t
     delays (array sp-time-t 2)
     mix-row-major (array sp-sample-t 4)
     state-directions (array sp-sample-t 2))
@@ -165,14 +212,14 @@
   (free poles.mode-list)
   (label exit status-return))
 
-(define (test-sph-reverb-modal-residues-basic) (status-t)
+(define (test-sp-reverb-late-modal-residues-basic) status-t
   status-declare
   (declare
     config sp-reverb-late-config-t
     layout sp-reverb-layout-t
     position sp-reverb-position-t
-    poles sp-reverb-modal-set-t
-    channel-modes sp-reverb-channel-modal-set-t
+    poles sp-reverb-late-modal-set-t
+    channel-modes sp-reverb-late-channel-modal-set-t
     delays (array sp-time-t 2)
     mix-row-major (array sp-sample-t 4)
     state-directions (array sp-sample-t 2)
@@ -222,17 +269,18 @@
   (test-helper-assert "modal-res-decay-match"
     (= (struct-get (array-get channel-modes.mode-list 0) decay)
       (struct-get (array-get poles.mode-list 0) decay)))
-  (free channel-modes.mode-list)
+  (free channel-modes.amplitude-list)
+  (free channel-modes.phase-list)
   (free poles.mode-list)
   (label exit status-return))
 
 (define (main) (int)
   status-declare
-  (test-helper-test-one test-sph-reverb-complex-primitives)
-  (test-helper-test-one test-sph-reverb-feedback-matrix-basic)
-  (test-helper-test-one test-sph-reverb-lu-and-solve-basic)
-  (test-helper-test-one test-sph-reverb-state-spatial-basic)
-  (test-helper-test-one test-sph-reverb-modal-basic)
-  (test-helper-test-one test-sph-reverb-modal-residues-basic)
+  (test-helper-test-one test-sp-reverb-late-modal-residues-basic)
+  (test-helper-test-one test-sp-reverb-late-complex-primitives)
+  (test-helper-test-one test-sp-reverb-late-feedback-matrix-basic)
+  (test-helper-test-one test-sp-reverb-late-lu-and-solve-basic)
+  (test-helper-test-one test-sp-reverb-late-state-spatial-basic)
+  (test-helper-test-one test-sp-reverb-late-modal-basic)
   test-helper-display-summary
   (label exit (return status.id)))

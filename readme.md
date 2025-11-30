@@ -21,8 +21,8 @@ frequency-domain reverb that scales from instrument cavities to concert halls an
     * time-domain modal synthesis per mode and channel
 
 # general implementation details
-* platform: c17, posix.1-2008, lp64, little endian, libc. primary target: x86_64, linux, musl.
-* dependencies: [embree](https://www.embree.org/) for the early reflections.
+* platform: c17, posix.1-2008, lp64, little endian, libc. primary target: x86_64, linux.
+* dependencies: [embree](https://www.embree.org/) for the early reflections. glibc because embree distribution packages are often compiled against it
 * all times and all frequencies are unsigned integer periods that represent counts of samples.
 * sp_time_t is the discrete unsigned integer type for every quantity that is bounded by the systems maximum sample index. this includes time, frequency, decay, and phase.
 * sp_sample_t is the real type for all continuous-valued quantities such as gains, matrix entries, and intermediate values.

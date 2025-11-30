@@ -6,26 +6,44 @@
 
 #define feq(a, b) (fabs((a - b)) <= 1.0e-12)
 #define sp_pi_half 1.5707963267948966
-status_t test_sph_reverb_complex_primitives(void) {
+void sp_reverb_late_complex_divide(sp_sample_t a_real, sp_sample_t a_imag, sp_sample_t b_real, sp_sample_t b_imag, sp_sample_t* out_real, sp_sample_t* out_imag);
+sp_sample_t sp_reverb_late_complex_magnitude(sp_sample_t value_real, sp_sample_t value_imag);
+sp_sample_t sp_reverb_late_complex_argument(sp_sample_t value_real, sp_sample_t value_imag);
+sp_sample_t sp_reverb_late_band_gain_at(sp_reverb_late_config_t* config, sp_time_t period);
+void sp_reverb_late_build_feedback_matrix(sp_reverb_late_config_t* config, sp_time_t period, sp_sample_t* matrix_real, sp_sample_t* matrix_imag);
+void sp_reverb_late_build_feedback_matrix_from_polar(sp_reverb_late_config_t* config, sp_sample_t radius, sp_sample_t angle, sp_sample_t* matrix_real, sp_sample_t* matrix_imag);
+void sp_reverb_late_form_identity_minus_feedback(sp_time_t line_count, sp_sample_t* feedback_real, sp_sample_t* feedback_imag, sp_sample_t* a_real, sp_sample_t* a_imag);
+void sp_reverb_late_lower_upper_factorization(sp_time_t line_count, sp_sample_t* matrix_real, sp_sample_t* matrix_imag, sp_time_t* pivot_index_list);
+void sp_reverb_late_lower_upper_solve(sp_time_t line_count, sp_sample_t* matrix_real, sp_sample_t* matrix_imag, sp_time_t* pivot_list, sp_sample_t* right_real, sp_sample_t* right_imag, sp_sample_t* solution_real, sp_sample_t* solution_imag);
+void sp_reverb_late_power_iteration_dominant_eigenpair(sp_time_t line_count, sp_sample_t* matrix_real, sp_sample_t* matrix_imag, sp_sample_t* eigenvalue_real, sp_sample_t* eigenvalue_imag, sp_sample_t* eigenvector_real, sp_sample_t* eigenvector_imag, sp_time_t iteration_limit);
+void sp_reverb_late_eigen_equation_value(sp_reverb_late_config_t* config, sp_sample_t radius, sp_sample_t angle, sp_sample_t* out_real, sp_sample_t* out_imag);
+void sp_reverb_late_eigen_equation_jacobian_finite_difference(sp_reverb_late_config_t* config, sp_sample_t radius, sp_sample_t angle, sp_sample_t* out_dfr_dr, sp_sample_t* out_dfr_dtheta, sp_sample_t* out_dfi_dr, sp_sample_t* out_dfi_dtheta);
+void sp_reverb_late_newton_step_on_eigen_equation(sp_sample_t radius_current, sp_sample_t angle_current, sp_sample_t real_derivative_radius, sp_sample_t real_derivative_angle, sp_sample_t imag_derivative_radius, sp_sample_t imag_derivative_angle, sp_sample_t real_value, sp_sample_t imag_value, sp_sample_t* radius_next, sp_sample_t* angle_next);
+void sp_reverb_late_build_state_excitation(sp_reverb_late_config_t* config, sp_reverb_position_t* position, sp_sample_t* out_real, sp_sample_t* out_imag);
+void sp_reverb_late_null_vector_of_shifted_matrix(sp_time_t line_count, sp_sample_t* a_real, sp_sample_t* a_imag, int use_transpose, sp_sample_t* out_real, sp_sample_t* out_imag);
+void sp_reverb_late_build_state_projection(sp_reverb_late_config_t* config, sp_reverb_layout_t* layout, sp_reverb_position_t* position, sp_channel_count_t channel_index, sp_sample_t* out_real, sp_sample_t* out_imag);
+void sp_reverb_late_right_eigenvector_at_pole(sp_reverb_late_config_t* config, sp_sample_t radius, sp_sample_t angle, sp_sample_t* out_real, sp_sample_t* out_imag);
+void sp_reverb_late_left_eigenvector_at_pole(sp_reverb_late_config_t* config, sp_sample_t radius, sp_sample_t angle, sp_sample_t* out_real, sp_sample_t* out_imag);
+status_t test_sp_reverb_late_complex_primitives(void) {
   status_declare;
   sp_sample_t real_value;
   sp_sample_t imag_value;
   sp_sample_t mag_value;
   sp_sample_t arg_value;
-  sp_reverb_complex_divide((1.0), (0.0), (1.0), (0.0), (&real_value), (&imag_value));
+  sp_reverb_late_complex_divide((1.0), (0.0), (1.0), (0.0), (&real_value), (&imag_value));
   test_helper_assert("complex_divide_1_real", (feq(real_value, (1.0))));
   test_helper_assert("complex_divide_1_imag", (feq(imag_value, (0.0))));
-  sp_reverb_complex_divide((1.0), (1.0), (1.0), (0.0), (&real_value), (&imag_value));
+  sp_reverb_late_complex_divide((1.0), (1.0), (1.0), (0.0), (&real_value), (&imag_value));
   test_helper_assert("complex_divide_2_real", (feq(real_value, (1.0))));
   test_helper_assert("complex_divide_2_imag", (feq(imag_value, (1.0))));
-  mag_value = sp_reverb_complex_magnitude((3.0), (4.0));
+  mag_value = sp_reverb_late_complex_magnitude((3.0), (4.0));
   test_helper_assert("complex_mag_3_4", (feq(mag_value, (5.0))));
-  arg_value = sp_reverb_complex_argument((0.0), (1.0));
+  arg_value = sp_reverb_late_complex_argument((0.0), (1.0));
   test_helper_assert("complex_arg_pi_over_2", (feq(arg_value, sp_pi_half)));
 exit:
   status_return;
 }
-status_t test_sph_reverb_feedback_matrix_basic(void) {
+status_t test_sp_reverb_late_feedback_matrix_basic(void) {
   status_declare;
   sp_reverb_late_config_t config;
   sp_time_t delays[1];
@@ -46,18 +64,18 @@ status_t test_sph_reverb_feedback_matrix_basic(void) {
   config.strength = 0.5;
   config.state_directions = NULL;
   config.state_dimension_count = 0;
-  band_gain = sp_reverb_band_gain_at((&config), 200);
+  band_gain = sp_reverb_late_band_gain_at((&config), 200);
   test_helper_assert("band_gain_not_nan", (!isnan(band_gain)));
-  sp_reverb_build_feedback_matrix((&config), 200, matrix_real, matrix_imag);
+  sp_reverb_late_build_feedback_matrix((&config), 200, matrix_real, matrix_imag);
   test_helper_assert("feedback_matrix_real_not_nan", (!isnan((matrix_real[0]))));
   test_helper_assert("feedback_matrix_imag_not_nan", (!isnan((matrix_imag[0]))));
-  sp_reverb_build_feedback_matrix_from_polar((&config), (0.8), (sp_pi * 0.25), matrix_real, matrix_imag);
+  sp_reverb_late_build_feedback_matrix_from_polar((&config), (0.8), (sp_pi * 0.25), matrix_real, matrix_imag);
   test_helper_assert("feedback_matrix_polar_real_not_nan", (!isnan((matrix_real[0]))));
   test_helper_assert("feedback_matrix_polar_imag_not_nan", (!isnan((matrix_imag[0]))));
 exit:
   status_return;
 }
-status_t test_sph_reverb_lu_and_solve_basic(void) {
+status_t test_sp_reverb_late_lu_and_solve_basic(void) {
   status_declare;
   sp_sample_t matrix_real[4];
   sp_sample_t matrix_imag[4];
@@ -78,8 +96,8 @@ status_t test_sph_reverb_lu_and_solve_basic(void) {
   right_real[1] = 1.0;
   right_imag[0] = 0.0;
   right_imag[1] = 0.0;
-  sp_reverb_lower_upper_factorization(2, matrix_real, matrix_imag, pivot_list);
-  sp_reverb_lower_upper_solve(2, matrix_real, matrix_imag, pivot_list, right_real, right_imag, solution_real, solution_imag);
+  sp_reverb_late_lower_upper_factorization(2, matrix_real, matrix_imag, pivot_list);
+  sp_reverb_late_lower_upper_solve(2, matrix_real, matrix_imag, pivot_list, right_real, right_imag, solution_real, solution_imag);
   test_helper_assert("lu_solve_real_0_not_nan", (!isnan((solution_real[0]))));
   test_helper_assert("lu_solve_real_1_not_nan", (!isnan((solution_real[1]))));
   test_helper_assert("lu_solve_imag_0_not_nan", (!isnan((solution_imag[0]))));
@@ -87,7 +105,7 @@ status_t test_sph_reverb_lu_and_solve_basic(void) {
 exit:
   status_return;
 }
-status_t test_sph_reverb_state_spatial_basic(void) {
+status_t test_sp_reverb_late_state_spatial_basic(void) {
   status_declare;
   sp_reverb_late_config_t config;
   sp_reverb_position_t position;
@@ -116,12 +134,12 @@ status_t test_sph_reverb_state_spatial_basic(void) {
   layout.bases = bases;
   layout.channel_count = 2;
   layout.basis_length = 1;
-  sp_reverb_build_state_excitation((&config), (&position), vec_real, vec_imag);
+  sp_reverb_late_build_state_excitation((&config), (&position), vec_real, vec_imag);
   test_helper_assert("state_excitation_real_0_not_nan", (!isnan((vec_real[0]))));
   test_helper_assert("state_excitation_real_1_not_nan", (!isnan((vec_real[1]))));
   test_helper_assert("state_excitation_imag_0_zero", (feq((vec_imag[0]), (0.0))));
   test_helper_assert("state_excitation_imag_1_zero", (feq((vec_imag[1]), (0.0))));
-  sp_reverb_build_state_projection((&config), (&layout), (&position), 0, vec_real, vec_imag);
+  sp_reverb_late_build_state_projection((&config), (&layout), (&position), 0, vec_real, vec_imag);
   test_helper_assert("state_projection_real_0_not_nan", (!isnan((vec_real[0]))));
   test_helper_assert("state_projection_real_1_not_nan", (!isnan((vec_real[1]))));
   test_helper_assert("state_projection_imag_0_zero", (feq((vec_imag[0]), (0.0))));
@@ -129,10 +147,10 @@ status_t test_sph_reverb_state_spatial_basic(void) {
 exit:
   status_return;
 }
-status_t test_sph_reverb_modal_basic(void) {
+status_t test_sp_reverb_late_modal_basic(void) {
   status_declare;
   sp_reverb_late_config_t config;
-  sp_reverb_modal_set_t poles;
+  sp_reverb_late_modal_set_t poles;
   sp_time_t delays[2];
   sp_sample_t mix_row_major[4];
   sp_sample_t state_directions[2];
@@ -164,13 +182,13 @@ status_t test_sph_reverb_modal_basic(void) {
 exit:
   status_return;
 }
-status_t test_sph_reverb_modal_residues_basic(void) {
+status_t test_sp_reverb_late_modal_residues_basic(void) {
   status_declare;
   sp_reverb_late_config_t config;
   sp_reverb_layout_t layout;
   sp_reverb_position_t position;
-  sp_reverb_modal_set_t poles;
-  sp_reverb_channel_modal_set_t channel_modes;
+  sp_reverb_late_modal_set_t poles;
+  sp_reverb_late_channel_modal_set_t channel_modes;
   sp_time_t delays[2];
   sp_sample_t mix_row_major[4];
   sp_sample_t state_directions[2];
@@ -216,19 +234,20 @@ status_t test_sph_reverb_modal_residues_basic(void) {
   test_helper_assert("modal_res_total_modes_positive", (total_modes > 0));
   test_helper_assert("modal_res_period_match", (((channel_modes.mode_list)[0]).period == ((poles.mode_list)[0]).period));
   test_helper_assert("modal-res-decay-match", (((channel_modes.mode_list)[0]).decay == ((poles.mode_list)[0]).decay));
-  free((channel_modes.mode_list));
+  free((channel_modes.amplitude_list));
+  free((channel_modes.phase_list));
   free((poles.mode_list));
 exit:
   status_return;
 }
 int main(void) {
   status_declare;
-  test_helper_test_one(test_sph_reverb_complex_primitives);
-  test_helper_test_one(test_sph_reverb_feedback_matrix_basic);
-  test_helper_test_one(test_sph_reverb_lu_and_solve_basic);
-  test_helper_test_one(test_sph_reverb_state_spatial_basic);
-  test_helper_test_one(test_sph_reverb_modal_basic);
-  test_helper_test_one(test_sph_reverb_modal_residues_basic);
+  test_helper_test_one(test_sp_reverb_late_modal_residues_basic);
+  test_helper_test_one(test_sp_reverb_late_complex_primitives);
+  test_helper_test_one(test_sp_reverb_late_feedback_matrix_basic);
+  test_helper_test_one(test_sp_reverb_late_lu_and_solve_basic);
+  test_helper_test_one(test_sp_reverb_late_state_spatial_basic);
+  test_helper_test_one(test_sp_reverb_late_modal_basic);
   test_helper_display_summary;
 exit:
   return ((status.id));

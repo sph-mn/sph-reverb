@@ -5,22 +5,18 @@ target_dir=tmp
 c=src/c
 c_sc=src/c-precompiled
 root="$PWD"
-
-if command -v musl-gcc >/dev/null; then
-  compiler=musl-gcc
-else
-  compiler=gcc
-fi
+compiler=gcc
 
 warnings="-Wall -Wfatal-errors"
-gcc_options="-std=c17 -pedantic-errors -D_POSIX_C_SOURCE=200809L -D_FILE_OFFSET_BITS=64 $warnings -fno-common -fno-math-errno -fPIC -O$optimisation -I$c/foreign -I$c_sc"
+gcc_options="-std=c17 -pedantic-errors -D_POSIX_C_SOURCE=200809L -D_FILE_OFFSET_BITS=64 $warnings -fno-common -fno-math-errno -fPIC -O$optimisation -I$c/foreign -I$c_sc -I/usr/include/embree4"
+embree_libs="-lembree4 -lm -lpthread -ldl"
 
 compile_sph_reverb() {
   src="$c_sc/sph-reverb/sph-reverb.c"
   obj="$target_dir/sph-reverb.o"
   lib="$target_dir/libsph-reverb.so"
   $compiler $gcc_options -c "$src" -o "$obj"
-  $compiler $gcc_options -shared "$obj" -lm -o "$lib"
+  $compiler $gcc_options -shared "$obj" $embree_libs -o "$lib"
 }
 
 compile_test_sph_reverb() {
@@ -28,7 +24,7 @@ compile_test_sph_reverb() {
   obj="$target_dir/test-sph-reverb.o"
   exe="$target_dir/test-libsph-reverb"
   $compiler $gcc_options -c "$src" -o "$obj"
-  $compiler $gcc_options "$obj" -L"$root/$target_dir" -Wl,-rpath,"$root/$target_dir" -lsph-reverb -lm -o "$exe"
+  $compiler $gcc_options "$obj" -L"$root/$target_dir" -Wl,-rpath,"$root/$target_dir" -lsph-reverb $embree_libs -o "$exe"
 }
 
 mkdir -p "$target_dir"
