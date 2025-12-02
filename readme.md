@@ -1,16 +1,21 @@
 # sph-reverb
 frequency-domain reverb that scales from instrument cavities to concert halls and supports arbitrary spatial layouts.
 
+work in progress.
+
+designed for offline, high-accuracy rendering.
+
 # algorithm hierarchy
 * early reflections
-  * geometric acoustics
-    * image-source method
-    * beam tracing
-    * uniform theory of diffraction
+  * geometric acoustics by ray tracing
+    * deterministic image-source enumeration with embree
+    * first-order specular reflections and direct path
+  * diffraction
+    * first-order uniform theory of diffraction from user-specified edges
 * modal correction
-  * low-frequency Helmholtz eigenproblem on a uniform grid
-  * Robin boundary impedance
-  * Lanczos thick-restart eigensolver
+  * low-frequency helmholtz eigenproblem on a uniform grid
+  * robin boundary impedance
+  * lanczos thick-restart eigensolver
 * late reflections
   * modal feedback delay network in the frequency domain
     * poles from delay geometry, absorption, and mixing
@@ -22,7 +27,7 @@ frequency-domain reverb that scales from instrument cavities to concert halls an
 
 # general implementation details
 * platform: c17, posix.1-2008, lp64, little endian, libc. primary target: x86_64, linux.
-* dependencies: [embree](https://www.embree.org/) for the early reflections. glibc because embree distribution packages are often compiled against it
+* dependencies: [embree](https://www.embree.org/) for the early reflections. glibc because embree distribution packages are often compiled against it.
 * all times and all frequencies are unsigned integer periods that represent counts of samples.
 * sp_time_t is the discrete unsigned integer type for every quantity that is bounded by the systems maximum sample index. this includes time, frequency, decay, and phase.
 * sp_sample_t is the real type for all continuous-valued quantities such as gains, matrix entries, and intermediate values.
@@ -79,133 +84,88 @@ residual_tail
 ## procedures
 ~~~
 sp_reverb_late_modal_poles
-  given config
-  search complex plane for z_k = r_k * exp(j * theta_k) with 0 < r_k < 1
-  solve det(I - G(z_k)) = 0
-  for each solution k
-    period_k = round(2 * pi / theta_k) in samples
-    decay_k = round(1 / (-log(r_k))) in samples
-    define modal_pole_k = (period_k decay_k)
-  optionally sort modes by estimated energy or residue magnitude
-  assemble modal_pole_set from modal_pole_k
+  given a late configuration
+  determine the set of complex poles z = r * exp(j*theta) of the feedback matrix
+    within the region 0 < r < 1
+  convert each pole to a modal representation
+    period is derived from theta
+    decay is derived from r
+  collect all modes into a modal_pole_set
+  the implementation may choose any stable and convergent numerical search strategy
 
 sp_reverb_late_modal_state_excitation
-  given config position
-  for each delay line i
-    read state direction s_i from config.state_directions
-    compute unit source direction u_p from position
-    compute unit state direction u_i from s_i
-    cos_i = dot(u_p, u_i)
-    x_i = max(cos_i, 0)
-    b_i_real = f_source(x_i) for a chosen source lobe function
-  normalize b_i_real so sum_i (b_i_real^2) = 1
-  define input vector b(position) with real part b_i_real and zero imaginary part
+  given a late configuration and a source position
+  evaluate how strongly each delay-line state is excited by the source
+    using any directional or positional model consistent with config.state_directions
+  return a real-valued excitation vector b(position)
+    normalized or scaled as chosen by the implementation
+    as long as relative excitation across states is preserved
 
 sp_reverb_late_modal_state_projection
-  given config layout position channel_index
-  read channel position x_c from layout.bases
-  compute unit channel direction u_c from x_c
-  compute scalar channel pan gain g_c(position, x_c) from a chosen pan law on [-1, 1]^dimension
-  for each delay line i
-    read state direction s_i from config.state_directions
-    compute unit state direction u_i from s_i
-    cos_ci = dot(u_c, u_i)
-    y_ci = max(cos_ci, 0)
-    h_ci = f_channel(y_ci) for a chosen projection lobe function
-    c_ci_real = g_c(position, x_c) * h_ci
-  optionally normalize c_ci_real over i
-  define output vector c(channel_index, position) with real part c_ci_real and zero imaginary part
+  given a late configuration, a layout, a position, and a channel index
+  evaluate how each delay-line state contributes to the specified channel
+    using any directional or positional model consistent with layout.bases
+  return a real-valued projection vector c(channel, position)
+    up to a global gain convention chosen by the implementation
 
 sp_reverb_late_modal_residues
-  given config modal_pole_set position layout
-  construct shared input vector b(position) by sp_reverb_late_modal_state_excitation
-  for each mode k with modal_pole_k in modal_pole_set
-    reconstruct theta_k and r_k from period_k and decay_k
-      theta_k = 2 * pi / period_k
-      r_k = exp(-1 / decay_k)
-    form complex pole z_k = r_k * exp(j * theta_k)
-    build G_k = G(z_k) from config
-    solve G_k * v_k = v_k for a nontrivial right eigenvector v_k
-    solve transpose(w_k) * G_k = transpose(w_k) for a nontrivial left eigenvector w_k
-    compute scalar sk = transpose(w_k) * b(position)
-    compute scalar n_k = transpose(w_k) * v_k
-    for each channel_index
-      construct output vector c(channel_index, position) by sp_reverb_late_modal_state_projection
-      compute scalar t_kc = transpose(c(channel_index,position)) * v_k
-      alpha_kc = (t_kc * s_k) / n_k
-      amplitude_kc = absolute_value(alpha_kc)
-      phase_kc = round(argument(alpha_kc) * period_k / (2 * pi)) in samples
-      define channel_modal_residue(channel_index, k) = (amplitude_kc phase_kc)
-  assemble channel_modal_set from channel_modal_residue(channel_index, k)
+  given a late configuration, a modal_pole_set, a position, and a layout
+  compute modal residues using the excitation and projection vectors
+    and the chosen eigensystem representation for each pole
+  produce a channel_modal_set that associates every mode with
+    an amplitude and a phase per channel
+  the method of eigenvector computation, normalization, and residue
+    scaling is not constrained as long as it is mathematically consistent
 
 sp_reverb_late_modal_excitation
-  given modal_pole_set channel_modal_set sampled_input_partial:...
-  for each sampled_input_partial with period_in
-    for each channel_modal_residue(channel_index, k)
-      read period_k and decay_k from modal_pole_k
-      read amplitude_kc and phase_kc from channel_modal_residue
-      if using direct mode add
-        gain_kc = amplitude_kc
-      else
-        theta_k = 2 * pi / period_k
-        r_k = exp(-1 / decay_k)
-        z_k = r_k * exp(j * theta_k)
-        z_ratio = exp(-j * 2 * pi * period_in / period_k)
-        gain_kc = amplitude_kc / absolute_value(1 - z_k * z_ratio)
-      define decay_output_partial_kc
-        gain = gain_kc
-        period = period_k
-        phase = phase_kc
-        decay = decay_k
-  collect decay_output_partial_kc as decay_output_partial:channel ...
+  given modal_poles, modal residues, and sampled input partials
+  determine how each input partial excites each mode for each channel
+    using any stable interpretation of the modal transfer function
+  generate a set of decay_output_partial objects per channel
+    each describing gain, period, phase, and decay for one modal contribution
 
 sp_reverb_late_modal_render_partials
-  given decay_output_partial:channel ...
-  for each decay_output_partial_kc
-    construct channel_output_partial for channel_index
-      {t -> gain(t)} is exponential decay with time constant decay
-      {t -> period(t)} is constant period
-      phase is phase
-      duration is derived from decay or from a global tail limit
-  assemble channel_output_partial:channel ...
+  given decay_output_partial objects
+  construct channel_output_partial objects for each channel
+    representing exponentially decaying sinusoids
+    with time-varying or constant parameters according to the implementation choice
+  durations may be determined from decay, global limits, or any consistent rule
 
 sp_reverb_late_residual_tail
-  given config position layout
-  derive residual_tail:channel ... from unresolved mode region
-  for example
-    use colored noise per channel with gain shaped by a short decay_profile
-    start at time where deterministic modal tail energy falls below residual.start_threshold
-    limit duration per channel to residual.duration_limit
+  optionally model the unresolved modal region
+    using a noise-based or filtered residual consistent with the configuration
+  return a residual_tail structure per channel
 
 sp_reverb_late_render
-  given config position layout input_partial:...
-  sampled_input_partial:... = map input_partial:... -> sampled_input_partial:...
-  modal_pole_set = sp_reverb_late_modal_poles(config)
-  channel_modal_set = sp_reverb_late_modal_residues(config modal_pole_set position layout)
-  decay_output_partial:channel ... = sp_reverb_late_modal_excitation(modal_pole_set channel_modal_set sampled_input_partial:...)
-  channel_output_partial:channel ... = sp_reverb_late_modal_render_partials(decay_output_partial:channel ...)
-  residual_tail:channel ... = sp_reverb_late_residual_tail(config position layout) (optional)
+  given configuration, position, layout, and input partials
+  produce the complete late-field representation by
+    generating modal_poles
+    computing residues
+    computing modal excitation
+    converting modal contributions to channel partials
+    optionally adding a residual tail
+  return all late-field partials and optional residual tails per channel
 ~~~
 
 ## functions
 ~~~
-sp_reverb_late_modal_poles :: config -> modal_pole_set
-sp_reverb_late_modal_state_excitation :: config position -> b_vector
-sp_reverb_late_modal_state_projection :: config layout position channel_index -> c_vector
-sp_reverb_late_modal_residues :: config modal_pole_set position layout -> channel_modal_set
-sp_reverb_late_modal_excitation :: modal_pole_set channel_modal_set sampled_input_partial:... -> decay_output_partial:channel ...
-sp_reverb_late_modal_render_partials :: decay_output_partial:channel ... -> channel_output_partial:channel ...
-sp_reverb_late_residual_tail :: config position layout -> residual_tail:channel ...
-sp_reverb_late_render :: config position layout input_partial:... -> (channel_output_partial:channel ... residual_tail:channel ...)
-sp_reverb_build_feedback_matrix :: config period -> matrix
-sp_reverb_build_feedback_matrix_from_polar :: config r theta -> matrix
-sp_reverb_form_identity_minus_feedback :: matrix -> matrix
-sp_reverb_lower_upper_factorization :: matrix -> (l u)
-sp_reverb_lower_upper_solve :: (l u) vector -> vector
-sp_reverb_power_iteration_dominant_eigenpair :: matrix -> (lambda vector)
-sp_reverb_eigen_equation_value :: config r theta -> (real imag)
-sp_reverb_eigen_equation_jacobian_finite_difference :: config r theta -> (dfr_dr dfr_dtheta dfi_dr dfi_dtheta)
-sp_reverb_newton_step_on_eigen_equation :: (r theta) (jacobian function) -> (r_next theta_next)
+sp_reverb_late_modal_poles(config) -> modal_pole_set
+sp_reverb_late_modal_state_excitation(config, position) -> b_vector
+sp_reverb_late_modal_state_projection(config, layout, position, channel_index) -> c_vector
+sp_reverb_late_modal_residues(config, modal_pole_set, position, layout) -> channel_modal_set
+sp_reverb_late_modal_excitation(modal_pole_set, channel_modal_set, sampled_input_partial list) -> decay_output_partial per channel
+sp_reverb_late_modal_render_partials(decay_output_partial per channel) -> channel_output_partial per channel
+sp_reverb_late_residual_tail(config, position, layout) -> residual_tail per channel
+sp_reverb_late_render(config, position, layout, input_partial list) -> (channel_output_partial per channel, residual_tail per channel)
+sp_reverb_build_feedback_matrix(config, period) -> matrix
+sp_reverb_build_feedback_matrix_from_polar(config, r, theta) -> matrix
+sp_reverb_form_identity_minus_feedback(matrix) -> matrix
+sp_reverb_lower_upper_factorization(matrix) -> (l, u)
+sp_reverb_lower_upper_solve((l, u), vector) -> vector
+sp_reverb_power_iteration_dominant_eigenpair(matrix) -> (lambda, vector)
+sp_reverb_eigen_equation_value(config, r, theta) -> (real, imag)
+sp_reverb_eigen_equation_jacobian_finite_difference(config, r, theta) -> (dfr_dr, dfr_dtheta, dfi_dr, dfi_dtheta)
+sp_reverb_newton_step_on_eigen_equation((r, theta), jacobian, function) -> (r_next, theta_next)
 ~~~
 
 ## structures
@@ -267,93 +227,177 @@ residual_tail
 * [Residue theorem](https://en.wikipedia.org/wiki/Residue_theorem)
 
 # early reflections
+# early reflections
+early reflections form the geometric acoustics part of the reverb system. the model is deterministic and operates on polygonal triangle meshes. propagation paths consist of straight line segments, specular reflections, and first order edge diffraction. all visibility tests use embree. frequency dependent effects are computed per band by combining triangle reflection magnitude and phase with air attenuation per meter.
+
+path enumeration is unbounded in reflection count and stops only when the predicted band energy of a candidate branch falls below a numerical threshold. this yields a geometry aligned high frequency response. the low frequency region is handled by the late modal solver. both operate independently and combine at the partial level.
+
 ## algorithm layout
-* geometric acoustics
-  * image-source method (convex, planar, specular boundaries)
-  * beam tracing (nonconvex or topologically complex spaces)
-  * uniform theory of diffraction for edge contributions
-* modal correction (low-frequency only: below the schroeder frequency or within instrument-scale cavities)
-  * uniform-grid helmholtz eigenproblem with robin boundary impedance; lanczos (thick-restart) for the lowest modes
+* direct path
+  * straight segment from source to receiver
+  * visibility by ray cast
+  * per band air attenuation
+* specular reflections
+  * reflection chain via mirrored receiver construction
+  * per segment visibility test
+  * per band reflection magnitude and phase
+  * termination when energy < threshold
+* first order diffraction
+  * user provided diffraction edges
+  * uniform theory of diffraction per band
+  * visibility tests for source to edge and edge to receiver
+* band dependent propagation
+  * band_period_list defines global band structure
+  * reflectivity magnitude and phase per triangle per band
+  * air attenuation per meter per band
+  * multiplicative accumulation along a path
+* termination
+  * no fixed reflection order
+  * branch ends when band energy < threshold
+
+## procedures
+~~~
+sp_reverb_early_direct_path
+  given scene, source, and receiver
+  use embree to test line-of-sight between source and receiver
+  if any occluder is hit, output no path
+  otherwise
+    compute geometric distance from source to receiver in meters
+    convert distance to delay in samples by samples_per_meter
+    compute direct gain from distance law
+    set direction as unit vector from source to receiver
+    define one order-0 path with no reflections and empty band response
+
+sp_reverb_early_paths_image
+  given scene, source, receiver, and an energy or order limit
+  construct all specular reflection paths that satisfy the limit
+  for each valid path
+    reconstruct a geometric chain from source to receiver
+    compute total path length in meters
+    convert path length to delay in samples by samples_per_meter
+    determine the sequence of hit triangles or materials
+    apply material and air response per band to form band gain and phase
+    set direction as the incoming unit vector at the receiver
+    define one early path with order equal to the reflection count
+
+sp_reverb_early_paths_diffraction
+  given scene, a user-specified set of diffraction edges, and band periods
+  detect source–receiver pairs where direct or specular paths are shadowed
+  for each relevant edge and shadowed configuration
+    evaluate a first-order utd diffraction coefficient per band
+    compute the diffracted path length from source to edge to receiver
+    convert this length to delay in samples by samples_per_meter
+    construct band gain and phase from utd coefficients and air attenuation
+    set direction as unit vector from edge to receiver
+    define one diffraction path using the common early path structure
+
+sp_reverb_early_paths_union
+  given several early path sets
+  merge all paths into a single list
+  enforce a deterministic ordering, for example by increasing delay
+  remove exact duplicates according to full path structure
+  return the unified early path list
+
+sp_reverb_early_paths_cull
+  given an early path list and culling parameters
+  remove paths whose broadband energy falls below a fixed threshold
+  if a maximum path count is given
+    keep only the most relevant paths under that count, using a fixed rule
+  preserve a deterministic ordering for the remaining paths
+  return the reduced path list
+
+sp_reverb_early_partials_from_paths
+  given an early path list, a layout, and sampled input partials
+  for each path and each channel in the layout
+    derive a channel gain from the path direction and channel basis
+    for each input partial
+      propagate the path delay into a phase offset for that partial
+      combine path gain, channel gain, and input gain into one amplitude
+      set the early partial duration according to the chosen early–late split
+      define one early_partial with channel index, gain, period, phase, and duration
+  return the early_partial list
+
+sp_reverb_early_noise_partials_from_paths
+  given an early path list, a layout, and a noise band specification
+  for each path and each channel
+    derive a channel gain from the path direction and channel basis
+    compress the per-band path response into the requested noise band
+    set gain and duration for a band-limited noise excitation
+    define one early_noise_partial per channel and band where needed
+  return the early_noise_partial list
+
+sp_reverb_early
+  given scene, source, receiver, layout, and sampled input partials
+  compute direct and specular paths by sp_reverb_early_paths_image
+  compute diffraction paths by sp_reverb_early_paths_diffraction
+  merge all paths by sp_reverb_early_paths_union
+  reduce the merged set by sp_reverb_early_paths_cull
+  map the resulting paths to early_partial by sp_reverb_early_partials_from_paths
+  return the early_partial list as the deterministic early reflection contribution
+~~~
 
 ## functions
 ~~~
-sp_reverb_early_geometry :: (vec3 ...) (index ...) -> geometry
-sp_reverb_early_materials :: (frequency ...) {band -> reflectivity} {band -> attenuation} -> materials
-sp_reverb_early_source :: vec3 vec3 -> source
-sp_reverb_early_receiver :: vec3 vec3 -> receiver
-sp_reverb_early_image :: geometry materials source receiver max_order:int path_cap:int -> config
-sp_reverb_early_beam :: geometry materials source receiver max_order:int path_cap:int (index ...) -> config
-sp_reverb_early_diffraction :: geometry (index ...) (frequency ...) -> config
-sp_reverb_early_union :: config ... -> config
-sp_reverb_early_cull :: config threshold:real max_paths:int -> config
-sp_reverb_early_sine :: config sine -> sine:channel ...
-sp_reverb_early_noise :: config noise -> noise:channel ...
+sp_reverb_early_build_scene :: geometry materials -> scene
+sp_reverb_early_paths_direct :: scene source receiver -> path_set
+sp_reverb_early_paths_specular :: scene source receiver energy_threshold path_capacity -> path_set
+sp_reverb_early_paths_diffraction :: scene edge_list band_period_list band_count -> path_set
+sp_reverb_early_paths_union :: path_set_list path_set_count -> path_set
+sp_reverb_early_paths_cull :: path_set threshold max_paths -> path_set
+sp_reverb_early_partials_from_paths :: path_set layout sampled_partial_list partial_count -> early_partial_list:channel
 ~~~
 
 ## structures
 ~~~
 geometry
-  vertices: (vec3 ...)
-  faces: (index ...)
+  vertex_list
+  index_list
+  triangle_count
+  triangle_material_index
+  edge_list
+
 materials
-  bands: (frequency ...)
-  walls: {band -> reflectivity}
-  air: {band -> attenuation}
+  band_period_list
+  band_count
+  triangle_reflectivity_magnitude
+  triangle_reflectivity_phase
+  air_attenuation_per_meter
+
+scene
+  embree_device_handle
+  embree_scene_handle
+  geometry
+  materials
+
 source
-  position: vec3
-  orientation: vec3
+  position_world
+  orientation_world
+
 receiver
-  position: vec3
-  orientation: vec3
-config
-  paths: (path ...)
+  position_world
+  orientation_world
+
 path
-  delay: time
-  gain: real
-  direction: vec3
-  wall_chain: (wall_index ...)
-  order: integer
-  band_response: (gain ...)
+  delay
+  direction
+  triangle_chain
+  chain_length
+  band_gain_list
+  band_phase_list
+  band_count
+  kind
+
+path_set
+  path_list
+  path_count
 ~~~
 
-geometry
-* defines polygonal scene surfaces
-* faces are convex and planar
-* all geometry is static and specified in world coordinates
-
-materials
-* defines frequency-dependent reflection and absorption for walls and air
-* each wall uses a reflectivity value per frequency band
-* air model defines attenuation per distance per frequency band
-
-image
-* deterministic geometric solver for convex or planar enclosures
-* computes all specular reflection paths up to `max_order`
-* each path stores delay, gain, direction, and band-limited attenuation
-
-beam
-* generalizes the image-source approach to nonconvex or occluded geometries
-* propagates beams instead of point paths and handles portals and visibility clipping
-* used when scene contains multiple rooms or nonplanar boundaries
-
-diffraction
-* adds edge diffraction paths using the uniform theory of diffraction
-* edge list indexes geometry edges where diffraction is to be computed
-* paths extend the specular solution to include diffracted arrivals
-
-union
-* merges multiple path sets into one
-* preserves delay ordering and removes duplicates
-
-cull
-* reduces the path set by amplitude threshold or maximum count
-* ensures bounded complexity while preserving dominant reflections
-
-sine
-* applies computed reflection paths to a sinusoidal partial
-* per-path gain and delay modify amplitude and phase
-* maps one input sine to one or more output channels depending on scene layout
-
-noise
-* same as `sine` but for broadband or stochastic excitation
-* applies band-dependent reflection gains and delays
+## description
+* geometry: triangle mesh in world coordinates. each triangle has one material index. diffraction edges supplied explicitly.
+* materials: reflectivity magnitude and phase per triangle per band. air attenuation per meter per band. all band arrays share the same band_period_list.
+* direct path: straight segment from source to receiver. delay in samples from geometric distance and samples per meter. per band air attenuation applied.
+* specular reflections: receiver is mirrored through triangle planes to form a reflection chain. each segment must be visible. per band reflection applied. branch stops when energy falls below threshold.
+* diffraction: first order uniform theory of diffraction. diffracted point lies on a specified edge. per band diffraction coefficient applied. visibility between source and edge and between edge and receiver required.
+* union: concatenates input path sets. removes duplicates. sorts by delay.
+* cull: applies amplitude threshold or maximum count. preserves ordering.
+* partials: for each sampled input partial, each geometric path generates per channel early partials. per band gain and phase form the partial gain and phase. channel index determined by the layout.

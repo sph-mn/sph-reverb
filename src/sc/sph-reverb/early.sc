@@ -166,23 +166,15 @@
     out-path:band-count 0)
   (return 1))
 
-(define (sp-reverb-early-paths-image scene source receiver max-order path-cap)
-  (sp-reverb-early-path-set-t sp-reverb-early-scene-t* sp-reverb-early-source-t* sp-reverb-early-receiver-t* sp-time-t sp-time-t)
-  (declare
-    result sp-reverb-early-path-set-t
-    path-list sp-reverb-early-path-t*
-    path sp-reverb-early-path-t
-    has-direct-path int)
-  (set result.path-list 0 result.path-count 0)
-  (if (= path-cap 0) (return result))
+(define (sp-reverb-early-paths-image scene source receiver max-order path-capacity out-path-list)
+  (sp-time-t sp-reverb-early-scene-t* sp-reverb-early-source-t* sp-reverb-early-receiver-t* sp-time-t sp-time-t sp-reverb-early-path-t*)
+  (declare path sp-reverb-early-path-t count sp-time-t has-direct-path int)
+  (set count 0)
+  (if (= path-capacity 0) (return 0))
   (set has-direct-path (sp-reverb-early-direct-path scene source receiver &path))
-  (if (not has-direct-path) (return result))
-  (set path-list
-    (convert-type (malloc (* (sizeof sp-reverb-early-path-t) (convert-type 1 size-t)))
-      sp-reverb-early-path-t*))
-  (if (= path-list 0) (return result))
-  (set (array-get path-list 0) path result.path-list path-list result.path-count 1)
-  (return result))
+  (if (not has-direct-path) (return 0))
+  (set (array-get out-path-list 0) path count 1)
+  (return count))
 
 (define
   (sp-reverb-early-paths-beam scene source receiver max-order path-cap portal-index-list portal-index-count)

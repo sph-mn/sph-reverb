@@ -62,7 +62,7 @@ typedef struct {
   sp_time_t duration;
 } sp_reverb_early_noise_partial_t;
 void sp_reverb_early_build_scene(sp_reverb_early_geometry_t* geometry, sp_reverb_early_materials_t* materials, sp_reverb_early_scene_t* out_scene);
-sp_reverb_early_path_set_t sp_reverb_early_paths_image(sp_reverb_early_scene_t* scene, sp_reverb_early_source_t* source, sp_reverb_early_receiver_t* receiver, sp_time_t max_order, sp_time_t path_cap);
+sp_time_t sp_reverb_early_paths_image(sp_reverb_early_scene_t* scene, sp_reverb_early_source_t* source, sp_reverb_early_receiver_t* receiver, sp_time_t max_order, sp_time_t path_capacity, sp_reverb_early_path_t* out_path_list);
 sp_reverb_early_path_set_t sp_reverb_early_paths_beam(sp_reverb_early_scene_t* scene, sp_reverb_early_source_t* source, sp_reverb_early_receiver_t* receiver, sp_time_t max_order, sp_time_t path_cap, uint32_t* portal_index_list, uint32_t portal_index_count);
 sp_reverb_early_path_set_t sp_reverb_early_paths_diffraction(sp_reverb_early_scene_t* scene, uint32_t* edge_index_list, uint32_t edge_index_count, sp_time_t* band_period_list, sp_time_t band_count);
 sp_reverb_early_path_set_t sp_reverb_early_paths_union(sp_reverb_early_path_set_t* path_set_list, uint32_t path_set_count);

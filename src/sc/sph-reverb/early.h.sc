@@ -60,9 +60,9 @@
       (duration sp-time-t)))
   (sp-reverb-early-build-scene geometry materials out-scene)
   (void sp-reverb-early-geometry-t* sp-reverb-early-materials-t* sp-reverb-early-scene-t*)
-  (sp-reverb-early-paths-image scene source receiver max-order path-cap)
-  (sp-reverb-early-path-set-t sp-reverb-early-scene-t* sp-reverb-early-source-t*
-    sp-reverb-early-receiver-t* sp-time-t sp-time-t)
+  (sp-reverb-early-paths-image scene source receiver max-order path-capacity out-path-list)
+  (sp-time-t sp-reverb-early-scene-t* sp-reverb-early-source-t*
+    sp-reverb-early-receiver-t* sp-time-t sp-time-t sp-reverb-early-path-t*)
   (sp-reverb-early-paths-beam scene source
     receiver max-order path-cap portal-index-list portal-index-count)
   (sp-reverb-early-path-set-t sp-reverb-early-scene-t* sp-reverb-early-source-t*

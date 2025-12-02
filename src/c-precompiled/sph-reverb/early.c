@@ -195,28 +195,21 @@ int sp_reverb_early_direct_path(sp_reverb_early_scene_t* scene, sp_reverb_early_
   out_path->band_count = 0;
   return (1);
 }
-sp_reverb_early_path_set_t sp_reverb_early_paths_image(sp_reverb_early_scene_t* scene, sp_reverb_early_source_t* source, sp_reverb_early_receiver_t* receiver, sp_time_t max_order, sp_time_t path_cap) {
-  sp_reverb_early_path_set_t result;
-  sp_reverb_early_path_t* path_list;
+sp_time_t sp_reverb_early_paths_image(sp_reverb_early_scene_t* scene, sp_reverb_early_source_t* source, sp_reverb_early_receiver_t* receiver, sp_time_t max_order, sp_time_t path_capacity, sp_reverb_early_path_t* out_path_list) {
   sp_reverb_early_path_t path;
+  sp_time_t count;
   int has_direct_path;
-  result.path_list = 0;
-  result.path_count = 0;
-  if (path_cap == 0) {
-    return (result);
+  count = 0;
+  if (path_capacity == 0) {
+    return (0);
   };
   has_direct_path = sp_reverb_early_direct_path(scene, source, receiver, (&path));
   if (!has_direct_path) {
-    return (result);
+    return (0);
   };
-  path_list = ((sp_reverb_early_path_t*)(malloc((sizeof(sp_reverb_early_path_t) * ((size_t)(1))))));
-  if (path_list == 0) {
-    return (result);
-  };
-  path_list[0] = path;
-  result.path_list = path_list;
-  result.path_count = 1;
-  return (result);
+  out_path_list[0] = path;
+  count = 1;
+  return (count);
 }
 sp_reverb_early_path_set_t sp_reverb_early_paths_beam(sp_reverb_early_scene_t* scene, sp_reverb_early_source_t* source, sp_reverb_early_receiver_t* receiver, sp_time_t max_order, sp_time_t path_cap, uint32_t* portal_index_list, uint32_t portal_index_count);
 sp_reverb_early_path_set_t sp_reverb_early_paths_diffraction(sp_reverb_early_scene_t* scene, uint32_t* edge_index_list, uint32_t edge_index_count, sp_time_t* band_period_list, sp_time_t band_count);
