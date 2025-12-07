@@ -36,6 +36,22 @@
       (band-period-start sp-time-t)
       (band-period-end sp-time-t)
       (duration sp-time-t)))
+  sp-reverb-early-statistics-t
+  (type
+    (struct
+      (energy-envelope-per-band sp-sample-t*)
+      (energy-envelope-sample-count uint32-t)
+      (directional-histogram sp-sample-t*)
+      (directional-bin-count uint32-t)
+      (arrival-density sp-sample-t*)
+      (arrival-density-sample-count uint32-t)))
+  (sp-reverb-early-paths-union path-set-list path-set-count)
+  (sp-reverb-early-path-set-t sp-reverb-early-path-set-t* uint32-t)
+  (sp-reverb-early-paths-cull scene path-set cutoff max-path-count)
+  (sp-reverb-early-path-set-t sp-reverb-scene-t* sp-reverb-early-path-set-t*
+    sp-reverb-early-cutoff-t* sp-time-t)
+  (sp-reverb-early-statistics-from-paths scene path-set out-statistics)
+  (void sp-reverb-scene-t* sp-reverb-early-path-set-t* sp-reverb-early-statistics-t*)
   (sp-reverb-early-paths-diffraction context edge-index-list edge-index-count cutoff)
   (sp-reverb-early-path-set-t sp-reverb-early-context-t* uint32-t*
     uint32-t sp-reverb-early-cutoff-t*)

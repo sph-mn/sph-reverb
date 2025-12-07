@@ -43,6 +43,17 @@ typedef struct {
   sp_time_t band_period_end;
   sp_time_t duration;
 } sp_reverb_early_noise_partial_t;
+typedef struct {
+  sp_sample_t* energy_envelope_per_band;
+  uint32_t energy_envelope_sample_count;
+  sp_sample_t* directional_histogram;
+  uint32_t directional_bin_count;
+  sp_sample_t* arrival_density;
+  uint32_t arrival_density_sample_count;
+} sp_reverb_early_statistics_t;
+sp_reverb_early_path_set_t sp_reverb_early_paths_union(sp_reverb_early_path_set_t* path_set_list, uint32_t path_set_count);
+sp_reverb_early_path_set_t sp_reverb_early_paths_cull(sp_reverb_scene_t* scene, sp_reverb_early_path_set_t* path_set, sp_reverb_early_cutoff_t* cutoff, sp_time_t max_path_count);
+void sp_reverb_early_statistics_from_paths(sp_reverb_scene_t* scene, sp_reverb_early_path_set_t* path_set, sp_reverb_early_statistics_t* out_statistics);
 sp_reverb_early_path_set_t sp_reverb_early_paths_diffraction(sp_reverb_early_context_t* context, uint32_t* edge_index_list, uint32_t edge_index_count, sp_reverb_early_cutoff_t* cutoff);
 void sp_reverb_early_noise_partials_from_paths(sp_reverb_scene_t* scene, sp_reverb_early_path_set_t* path_set, sp_reverb_layout_t* layout, sp_time_t band_period_start, sp_time_t band_period_end, sp_time_t duration, sp_reverb_early_noise_partial_t* out_partial_list, sp_time_t out_partial_capacity, sp_time_t* out_partial_count);
 void sp_reverb_early_partials_from_paths(sp_reverb_scene_t* scene, sp_reverb_early_path_set_t* path_set, sp_reverb_layout_t* layout, sp_reverb_sampled_partial_t* partial_list, sp_time_t partial_count, sp_reverb_early_partial_t* out_partial_list, sp_time_t out_partial_capacity, sp_time_t* out_partial_count);
