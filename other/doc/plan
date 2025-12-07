@@ -1,0 +1,140 @@
+Short answer: finish the late/modal core first, but make its configuration explicitly geometry/material–driven. Then implement the early solver using the same scene description, and finally add a thin “calibration” layer that matches late behavior to what the early+geometry tell you.
+
+More detailed, but still concrete:
+
+## Section 1: what to complete first
+
+You have three conceptual blocks:
+
+* early: geometric + UTD, Embree-based
+* modal: mathematical FDN pole solver and residues
+* late: the actual reverberant tail synthesis using the poles and residues
+
+Given your goals and current code base, the order that gives you maximum rigor, testability, and future coupling is:
+
+* finalize shared scene primitives
+* complete the modal+late block
+* then build out the early solver
+
+In more detail:
+
+1. finalize shared scene primitives (do this now, before further heavy work)
+
+* geometry:
+
+  * triangle mesh in metres
+  * triangle→material index
+* materials:
+
+  * per-band reflectivity per material
+  * per-band air attenuation per sample
+  * band definition via band_period_list
+* layout:
+
+  * sp_reverb_layout_t (channels and their positions / bases)
+* position:
+
+  * sp_reverb_position_t for sources and receivers
+
+These are already mostly there. The key is: these primitives must be the **only** source of truth about the physical scene for *both* early and late. No separate “FDN config” with magic parameters disconnected from geometry.
+
+2. complete the late/modal core first
+
+Concretely:
+
+* sp_reverb_late_modal (FDN pole finder)
+* sp_reverb_late_modal_residues (per-channel residues, given layout and position)
+* the decaying sinusoid renderer for the modal set per channel
+
+and, just as important, the **configuration mapping**:
+
+* a small module that maps from scene primitives to late config:
+
+  * uses room scale (bounding box of geometry) and materials to derive:
+
+    * target per-band T60 curves (Sabine/Eyring or more advanced models)
+    * approximate average path lengths per band
+    * global strength parameter
+  * constructs:
+
+    * delay line lengths (in samples) consistent with room dimensions
+    * multiband gains per delay line consistent with materials
+    * mixing matrix with good echo-density properties
+
+This way, the late block is:
+
+* fully functional
+* fully grounded in geometry and materials
+* testable independently of the early solver
+
+You can verify:
+
+* pole locations vs intended T60 per band
+* energy decay curves per band
+* spatial image from residues vs layout
+
+3. then implement the early solver
+
+Once late is solid and geometry-driven, you do:
+
+* direct-path solver (done)
+* specular reflections via Embree (first order, then higher orders up to a numeric cutoff)
+* first-order UTD diffraction via user-provided edges
+* path culling by strict numerical energy threshold
+* mapping to early partials and early noise partials
+
+All of this uses the **same materials and bands** as the late block, including the same per-band reflectivities and air attenuation.
+
+## Section 2: how early informs late, without circular dependence
+
+You do not want the late solver to *depend* on running the early solver every time; that would be circular and expensive. Instead, you want:
+
+* scene geometry and materials to determine a *prior* configuration for late
+* the early solver to provide *diagnostics* that refine or validate that configuration
+
+In practice:
+
+* step 1: scene → late-config (always)
+
+  * from volume, surface areas, and reflectivities derive target per-band T60
+  * build FDN delays, band gains, and mixing to hit those targets
+
+* step 2: scene → early paths (optional, offline calibration)
+
+  * run early solver on the same scene
+  * compute from early paths:
+
+    * cumulative energy vs time per band
+    * cumulative energy vs direction per band
+    * echo density build-up curve (number of paths per time)
+
+* step 3: calibration layer (offline or design-time)
+
+  * compare:
+
+    * early energy envelope to FDN modal envelope near the early/late transition
+    * directional statistics of early to the FDN’s state_directions design
+  * adjust:
+
+    * FDN band gains so that energy and T60 curves match more precisely
+    * state_directions / mixing so that the directional statistics of the late tail extrapolate smoothly from the early ray statistics
+
+This achieves what you want:
+
+* late is informed by geometry and materials directly
+* late can be further refined by what you “measure” from the early solver
+* there is no runtime circular dependency: the calibration can be precomputed or cached
+
+## Section 3: direct answer to your question
+
+Given your requirement:
+
+* “we want to inform the late part by the scene geometry (materials, things we might measure, etc) of the early part”
+
+the correct implementation order that respects bottom-up accretive composition is:
+
+* finalize the shared scene and material model
+* finish the late/modal block and its geometry/material–based configuration
+* then build the early solver and a separate calibration layer that uses early results to refine late parameters
+
+So: complete modal+late first, but ensure from the start that all its inputs are expressed in terms of the same scene primitives that the early solver will use.

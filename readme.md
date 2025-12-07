@@ -227,7 +227,6 @@ residual_tail
 * [Residue theorem](https://en.wikipedia.org/wiki/Residue_theorem)
 
 # early reflections
-# early reflections
 early reflections form the geometric acoustics part of the reverb system. the model is deterministic and operates on polygonal triangle meshes. propagation paths consist of straight line segments, specular reflections, and first order edge diffraction. all visibility tests use embree. frequency dependent effects are computed per band by combining triangle reflection magnitude and phase with air attenuation per meter.
 
 path enumeration is unbounded in reflection count and stops only when the predicted band energy of a candidate branch falls below a numerical threshold. this yields a geometry aligned high frequency response. the low frequency region is handled by the late modal solver. both operate independently and combine at the partial level.
